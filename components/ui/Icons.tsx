@@ -15,7 +15,7 @@ function baseProps(props: SVGProps<SVGSVGElement>) {
 export function UsOutlineIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...baseProps(props)}>
-      <path d="M3.5 6.5h4l1.5 2 2-1.2 1.5 1.6 2.8-.7 1.8 1.7 2.4-.4 1 1.6v5l-2.2.7-1.7 2-2.3-.4-1.7 1.2-2.7-.8-2 1.1-1.4-1.6-2.7-.1-.8-2.2-.1-2.1.8-1.6-.5-2.2.5-1.8z" />
+      <path d="M3.8 8.2 6.1 6.4h4.1l1.2 1.4 2.2-.7 1.8 1.3 2.1-.3 1.9 1.8.2 2.2-1.1 1.1-.1 1.8-2.2.8-1.1 1.8-2.5-.2-1.5 1-2.2-.7-1.9.5-1.6-1.1-1.5.1-1-1.8.2-1.8-.9-1.6.6-1.7z" />
     </svg>
   );
 }
@@ -23,7 +23,7 @@ export function UsOutlineIcon(props: SVGProps<SVGSVGElement>) {
 export function EuropeOutlineIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...baseProps(props)}>
-      <path d="M5 7.5 7.2 5l2.6 1.1 1.7-1.4 2.2.8 1.9 2.3 2.1.2 1.3 2.1-1 2.7-2.2.9-1 2.1-2.2.7-1.1 1.8-2.4-.5-1.4-1.7-2.3-.8-1.1-2.4.7-2.2 1.1-2.1z" />
+      <path d="M5.2 8.2 7.1 6.1h2.4l1.2 1 1.6-.4 1.2 1.1 1.5-.2 1.3 1.4-.2 1.7 1 1.1-.4 1.7-1.8.6-.7 1.3-1.9.4-.9 1.1-1.8-.5-1.1-1.3-1.6-.4-1.1-1.5-.9-.1-.7-1.7.4-1.4.7-1.3z" />
     </svg>
   );
 }
@@ -31,8 +31,8 @@ export function EuropeOutlineIcon(props: SVGProps<SVGSVGElement>) {
 export function AsiaOutlineIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...baseProps(props)}>
-      <path d="M7 6.5 10 5l2.7 1.1 1.8-.8 2 .9 1.9 2.3-1.1 1.5-.2 2.3-1.8 1.7-2 .4-1.2 2-2.5.4-1.4-1.4-1.9-1-.9-2.1.7-2.4z" />
-      <path d="M13.5 8.5 16 7" />
+      <path d="M7 6.6 9.3 5.3l2.5.6 1.4 1.2 2-.3 1.7 1.8-.2 1.4 1.3 1.2-.5 1.8-1.7 1.1-.4 1.6-1.9.6-1 .9-2.1-.4-1.1-1.5-1.7-.5-1.3-1.7-1-.2-.7-1.6.6-1.9 1.1-1.5z" />
+      <path d="M13.2 8.7 15.4 7.8" />
     </svg>
   );
 }

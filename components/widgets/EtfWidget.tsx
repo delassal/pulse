@@ -1,7 +1,15 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Line, LineChart, ResponsiveContainer, Tooltip } from "recharts";
+import {
+  Area,
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+} from "recharts";
 import { Card } from "@/components/ui/Card";
 import {
   AsiaOutlineIcon,
@@ -25,10 +33,40 @@ function formatPct(value: number) {
 }
 
 function formatAsOf(value: string) {
-  return new Intl.DateTimeFormat("en-DE", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  const date = new Date(value);
+  const day = new Intl.DateTimeFormat("de-DE", { day: "2-digit" }).format(date);
+  const month = new Intl.DateTimeFormat("de-DE", { month: "short" })
+    .format(date)
+    .replace(/\.$/, "");
+  const year = new Intl.DateTimeFormat("de-DE", { year: "numeric" }).format(date);
+  const time = new Intl.DateTimeFormat("de-DE", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+
+  return `${day}. ${month} ${year} at ${time}`;
+}
+
+function formatTooltipDate(value: string) {
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatMonthTick(value: string) {
+  return new Intl.DateTimeFormat("en-US", { month: "short" }).format(
+    new Date(`${value}T00:00:00`),
+  );
+}
+
+function getMonthTicks(history: EtfData["history"]) {
+  return history.filter((point, index) => {
+    const previousMonth = history[index - 1]?.date.slice(0, 7);
+    return index === 0 || point.date.slice(0, 7) !== previousMonth;
+  }).map((point) => point.date);
 }
 
 function getRegionIcon(region: EtfConfig["region"]) {
@@ -85,32 +123,68 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
       : data.trend === "down"
         ? "text-rose-600"
         : "text-slate-500";
+  const ytdColor =
+    data.ytdChangePct > 0
+      ? "text-emerald-600"
+      : data.ytdChangePct < 0
+        ? "text-rose-600"
+        : "text-slate-500";
+  const monthTicks = getMonthTicks(data.history);
 
   return (
     <Card title={etf.displayName} subtitle={data.name} icon={getRegionIcon(etf.region)}>
       <div className="space-y-3">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="text-3xl font-semibold text-slate-900">
+        <p className="text-xs text-slate-500">As of {formatAsOf(data.asOf)}</p>
+
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
+          <div className="min-w-0">
+            <p className="text-3xl font-semibold tracking-tight text-slate-900">
               {formatCurrency(data.price, data.currency)}
             </p>
             <p className={`text-sm font-medium ${changeColor}`}>
-              {formatPct(data.dailyChangePct)} today · {formatPct(data.ytdChangePct)} ytd
+              {formatPct(data.dailyChangePct)} today
             </p>
           </div>
-          <p className="text-xs text-slate-400">{data.symbol}</p>
+
+          <div className={`text-right ${ytdColor}`}>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              YTD
+            </p>
+            <p className="text-2xl font-semibold leading-none">
+              {formatPct(data.ytdChangePct)}
+            </p>
+          </div>
         </div>
 
-        <p className="text-xs text-slate-500">
-          As of {formatAsOf(data.asOf)}
-        </p>
-
-        <div className="h-24 w-full">
+        <div className="h-28 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data.history}>
+            <ComposedChart data={data.history} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id={`etf-fill-${etf.isin}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={data.trend === "down" ? "#ef4444" : "#16a34a"} stopOpacity={0.24} />
+                  <stop offset="95%" stopColor={data.trend === "down" ? "#ef4444" : "#16a34a"} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" vertical />
+              <XAxis
+                dataKey="date"
+                ticks={monthTicks}
+                tickFormatter={formatMonthTick}
+                tick={{ fontSize: 10, fill: "#64748b" }}
+                axisLine={false}
+                tickLine={false}
+                minTickGap={18}
+              />
               <Tooltip
+                cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3" }}
                 formatter={(value) => formatCurrency(Number(value), data.currency)}
-                labelFormatter={(label) => `Date: ${label}`}
+                labelFormatter={(label) => formatTooltipDate(String(label))}
+              />
+              <Area
+                type="monotone"
+                dataKey="price"
+                stroke="none"
+                fill={`url(#etf-fill-${etf.isin})`}
               />
               <Line
                 type="monotone"
@@ -118,8 +192,9 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
                 stroke={data.trend === "down" ? "#dc2626" : "#16a34a"}
                 strokeWidth={2}
                 dot={false}
+                activeDot={{ r: 3 }}
               />
-            </LineChart>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>
