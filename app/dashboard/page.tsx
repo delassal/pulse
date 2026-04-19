@@ -9,13 +9,13 @@ export default function DashboardPage() {
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-6 sm:px-6 sm:py-8">
       <header className="mb-6">
         <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
-          Morning Briefing
+          {/* Morning Briefing */}
         </p>
         <h1 className="mt-1 text-3xl font-semibold text-slate-900 sm:text-4xl">
-          Pulse Dashboard
+          Pulse
         </h1>
         <p className="mt-2 text-sm text-slate-600">
-          Your quick snapshot of market, macro, and weather signals.
+          Daniel's quick snapshot of important signals.
         </p>
       </header>
 

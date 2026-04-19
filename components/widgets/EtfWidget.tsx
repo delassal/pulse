@@ -19,6 +19,13 @@ function formatPct(value: number) {
   return `${sign}${value.toFixed(2)}%`;
 }
 
+function formatAsOf(value: string) {
+  return new Intl.DateTimeFormat("en-DE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
 interface EtfWidgetProps {
   etf: EtfConfig;
 }
@@ -72,11 +79,15 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
               {formatCurrency(data.price, data.currency)}
             </p>
             <p className={`text-sm font-medium ${changeColor}`}>
-              {formatPct(data.dailyChangePct)} today
+              {formatPct(data.dailyChangePct)} today · {formatPct(data.ytdChangePct)} ytd
             </p>
           </div>
           <p className="text-xs text-slate-400">{data.symbol}</p>
         </div>
+
+        <p className="text-xs text-slate-500">
+          As of {formatAsOf(data.asOf)}
+        </p>
 
         <div className="h-24 w-full">
           <ResponsiveContainer width="100%" height="100%">

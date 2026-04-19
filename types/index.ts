@@ -11,8 +11,10 @@ export interface EtfData {
   currency: string;
   price: number;
   dailyChangePct: number;
+  ytdChangePct: number;
   trend: TrendDirection;
   history: EtfPoint[];
+  asOf: string;
   updatedAt: string;
 }
 

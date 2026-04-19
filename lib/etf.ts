@@ -30,7 +30,19 @@ export const ETF_CONFIGS: EtfConfig[] = [
 ];
 
 function getYahooChartUrl(symbol: string) {
-  return `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1mo&includePrePost=false&events=div%2Csplits`;
+  return `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1y&includePrePost=false&events=div%2Csplits`;
+}
+
+function startOfYearIso(date = new Date()): string {
+  return new Date(Date.UTC(date.getUTCFullYear(), 0, 1)).toISOString().slice(0, 10);
+}
+
+function formatAsOf(timestamp?: number): string {
+  if (!timestamp) {
+    return new Date().toISOString();
+  }
+
+  return new Date(timestamp * 1000).toISOString();
 }
 
 function getEtfConfig(identifier: string): EtfConfig {
@@ -69,6 +81,7 @@ export async function getEtfData(identifier: string): Promise<EtfData> {
           longName?: string;
           shortName?: string;
           regularMarketPrice?: number;
+          regularMarketTime?: number;
           chartPreviousClose?: number;
         };
         timestamp?: number[];
@@ -84,6 +97,8 @@ export async function getEtfData(identifier: string): Promise<EtfData> {
   const result = payload.chart?.result?.[0];
   const timestamps = result?.timestamp ?? [];
   const closes = result?.indicators?.quote?.[0]?.close ?? [];
+  const asOf = formatAsOf(result?.meta?.regularMarketTime);
+  const yearStart = startOfYearIso();
 
   const historyRows = timestamps
     .map((timestamp, index) => {
@@ -105,9 +120,13 @@ export async function getEtfData(identifier: string): Promise<EtfData> {
     throw new Error(`Insufficient ETF history for ${config.symbol}`);
   }
 
+  const ytdHistory = historyRows.filter((point) => point.date >= yearStart);
+  const chartHistory = ytdHistory.length >= 2 ? ytdHistory : historyRows;
+  const firstYtdPoint = chartHistory[0];
   const latest = historyRows[historyRows.length - 1];
   const previous = historyRows[historyRows.length - 2];
   const dailyChangePct = calcPctChange(latest.close, previous.close);
+  const ytdChangePct = calcPctChange(latest.close, firstYtdPoint.close);
 
   const trend: EtfData["trend"] =
     dailyChangePct > 0 ? "up" : dailyChangePct < 0 ? "down" : "flat";
@@ -118,11 +137,13 @@ export async function getEtfData(identifier: string): Promise<EtfData> {
     currency: meta.currency ?? config.currency,
     price: meta.regularMarketPrice ?? latest.close,
     dailyChangePct,
+    ytdChangePct,
     trend,
-    history: historyRows.slice(-20).map((point) => ({
+    history: chartHistory.map((point) => ({
       date: point.date,
       price: point.close,
     })),
+    asOf,
     updatedAt: new Date().toISOString(),
   };
 }
