@@ -15,6 +15,17 @@ interface SeriesPoint {
   value: number;
 }
 
+function pickValue(row: Record<string, string>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = row[key];
+    if (value !== undefined && value !== "") {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
 async function fetchCsvSeries(
   url: string,
   dateKeys: string[],
@@ -31,8 +42,8 @@ async function fetchCsvSeries(
 
   return rows
     .map((row) => {
-      const date = dateKeys.map((key) => row[key]).find(Boolean);
-      const rawValue = valueKeys.map((key) => row[key]).find(Boolean);
+      const date = pickValue(row, dateKeys);
+      const rawValue = pickValue(row, valueKeys);
       const value = toNumber(rawValue);
 
       if (!date || value === null) {
@@ -76,23 +87,43 @@ async function fetchEcbInflation(): Promise<MacroIndicator> {
 }
 
 async function fetchEcbPolicyRate(): Promise<MacroIndicator> {
-  const points = await fetchCsvSeries(
-    ECB_POLICY_RATE_URL,
-    ["TIME_PERIOD", "DATE"],
-    ["OBS_VALUE", "VALUE"],
-  );
-  const { latest, change } = latestWithChange(points);
+  try {
+    const points = await fetchCsvSeries(
+      ECB_POLICY_RATE_URL,
+      ["TIME_PERIOD", "DATE"],
+      ["OBS_VALUE", "VALUE"],
+    );
+    const { latest, change } = latestWithChange(points);
 
-  return {
-    label: "ECB Policy Rate",
-    value: latest,
-    change,
-    unit: "%",
-  };
+    return {
+      label: "ECB Policy Rate",
+      value: latest,
+      change,
+      unit: "%",
+    };
+  } catch {
+    const points = await fetchCsvSeries(
+      FRED_FEDFUNDS_URL,
+      ["observation_date"],
+      ["FEDFUNDS"],
+    );
+    const { latest, change } = latestWithChange(points);
+
+    return {
+      label: "Fed Funds Rate (fallback)",
+      value: latest,
+      change,
+      unit: "%",
+    };
+  }
 }
 
 async function fetchUsInflationFallback(): Promise<MacroIndicator> {
-  const points = await fetchCsvSeries(FRED_CPI_URL, ["DATE"], ["VALUE"]);
+  const points = await fetchCsvSeries(
+    FRED_CPI_URL,
+    ["observation_date"],
+    ["CPIAUCSL"],
+  );
 
   if (points.length < 13) {
     throw new Error("Insufficient CPI points for YoY inflation");
@@ -115,7 +146,11 @@ async function fetchUsInflationFallback(): Promise<MacroIndicator> {
 }
 
 async function fetchUsRateFallback(): Promise<MacroIndicator> {
-  const points = await fetchCsvSeries(FRED_FEDFUNDS_URL, ["DATE"], ["VALUE"]);
+  const points = await fetchCsvSeries(
+    FRED_FEDFUNDS_URL,
+    ["observation_date"],
+    ["FEDFUNDS"],
+  );
   const { latest, change } = latestWithChange(points);
 
   return {
@@ -129,28 +164,17 @@ async function fetchUsRateFallback(): Promise<MacroIndicator> {
 export async function getMacroData(): Promise<MacroData> {
   const sources = new Set<string>();
 
-  const [inflationResult, rateResult] = await Promise.allSettled([
-    fetchEcbInflation(),
-    fetchEcbPolicyRate(),
-  ]);
-
   let inflation: MacroIndicator;
-  if (inflationResult.status === "fulfilled") {
-    inflation = inflationResult.value;
+  try {
+    inflation = await fetchEcbInflation();
     sources.add("ECB");
-  } else {
+  } catch {
     inflation = await fetchUsInflationFallback();
     sources.add("FRED");
   }
 
-  let rate: MacroIndicator;
-  if (rateResult.status === "fulfilled") {
-    rate = rateResult.value;
-    sources.add("ECB");
-  } else {
-    rate = await fetchUsRateFallback();
-    sources.add("FRED");
-  }
+  const rate = await fetchEcbPolicyRate();
+  sources.add(rate.label.includes("ECB") ? "ECB" : "FRED");
 
   return {
     indicators: [inflation, rate],
