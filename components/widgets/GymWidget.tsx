@@ -18,6 +18,46 @@ const LEVEL_LABEL: Record<GymUsageData["level"], string> = {
   HIGH: "High",
 };
 
+function formatGymTooltipLabel(value: string) {
+  const [hours, minutes] = value.split(":");
+  return `${hours}:${minutes} Uhr`;
+}
+
+function renderGymTooltip() {
+  return function TooltipContent(props: any) {
+    const {
+      active,
+      label,
+      payload,
+    }: {
+      active?: boolean;
+      label?: string | number;
+      payload?: ReadonlyArray<{ value?: number }>;
+    } = props;
+
+    if (!active || !payload?.length) {
+      return null;
+    }
+
+    const value = payload[0]?.value;
+
+    if (typeof value !== "number") {
+      return null;
+    }
+
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg">
+        <p className="text-xs font-medium text-slate-500">
+          {formatGymTooltipLabel(String(label ?? ""))}
+        </p>
+        <p className="mt-1 text-sm font-semibold text-slate-900">
+          {Math.round(value)}%
+        </p>
+      </div>
+    );
+  };
+}
+
 export function GymWidget() {
   const { data, isLoading, isError, error } = useQuery<GymUsageData, Error>({
     queryKey: ["gym", "usage", "2405764950"],
@@ -85,8 +125,8 @@ export function GymWidget() {
                 tickLine={false}
               />
               <Tooltip
-                formatter={(value) => `${Number(value)}%`}
-                labelFormatter={(label) => `${label} Uhr`}
+                cursor={{ fill: "rgba(148, 163, 184, 0.12)" }}
+                content={renderGymTooltip()}
               />
               <Bar dataKey="percentage" radius={[3, 3, 0, 0]}>
                 {chartData.map((entry) => (

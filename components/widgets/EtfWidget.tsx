@@ -69,6 +69,42 @@ function getMonthTicks(history: EtfData["history"]) {
   }).map((point) => point.date);
 }
 
+function renderTooltip(currency: string) {
+  return function TooltipContent(props: any) {
+    const {
+      active,
+      label,
+      payload,
+    }: {
+      active?: boolean;
+      label?: string | number;
+      payload?: ReadonlyArray<{ value?: number; payload?: { date?: string } }>;
+    } = props;
+
+    if (!active || !payload?.length) {
+      return null;
+    }
+
+    const point = payload[0]?.payload;
+    const value = payload[0]?.value;
+
+    if (typeof value !== "number" || !point?.date) {
+      return null;
+    }
+
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg">
+        <p className="text-xs font-medium text-slate-500">
+          {formatTooltipDate(String(label ?? point.date))}
+        </p>
+        <p className="mt-1 text-sm font-semibold text-slate-900">
+          {formatCurrency(value, currency)}
+        </p>
+      </div>
+    );
+  };
+}
+
 function getRegionIcon(region: EtfConfig["region"]) {
   switch (region) {
     case "us":
@@ -177,8 +213,7 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
               />
               <Tooltip
                 cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3" }}
-                formatter={(value) => formatCurrency(Number(value), data.currency)}
-                labelFormatter={(label) => formatTooltipDate(String(label))}
+                content={renderTooltip(data.currency)}
               />
               <Area
                 type="monotone"
