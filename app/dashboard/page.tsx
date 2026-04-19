@@ -1,4 +1,5 @@
 import { EtfWidget } from "@/components/widgets/EtfWidget";
+import { GymWidget } from "@/components/widgets/GymWidget";
 import { MacroWidget } from "@/components/widgets/MacroWidget";
 import { WeatherWidget } from "@/components/widgets/WeatherWidget";
 
@@ -22,6 +23,7 @@ export default function DashboardPage() {
           <EtfWidget />
         </div>
         <WeatherWidget />
+        <GymWidget />
         <div className="sm:col-span-2 lg:col-span-3">
           <MacroWidget />
         </div>

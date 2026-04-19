@@ -5,6 +5,7 @@ Pulse is a mobile-first personal dashboard MVP that surfaces a quick morning bri
 - ETF snapshot for VWCE.DE
 - Macro indicators (EU-first with fallback)
 - Weather for a configurable city (default: Munich)
+- Current gym occupancy for Fitness First club 2405764950
 
 Built with:
 
@@ -36,6 +37,7 @@ npm run start
 app/
 	api/
 		etf/route.ts
+		gym/route.ts
 		macro/route.ts
 		weather/route.ts
 	dashboard/page.tsx
@@ -49,14 +51,19 @@ components/
 		Card.tsx
 	widgets/
 		EtfWidget.tsx
+		GymWidget.tsx
 		MacroWidget.tsx
 		WeatherWidget.tsx
 
 lib/
 	etf.ts
+	gym.ts
 	macro.ts
 	weather.ts
 	utils.ts
+
+docs/
+	api-endpoints.md
 
 types/
 	index.ts
@@ -74,6 +81,7 @@ types/
 - ETF: Stooq CSV feed (`VWCE.DE`)
 - Macro: ECB Data API (preferred), FRED CSV fallback
 - Weather: Open-Meteo geocoding + forecast APIs
+- Gym usage: Fitness First usage API (club week endpoint)
 
 ## Notes
 

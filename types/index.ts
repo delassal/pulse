@@ -38,6 +38,18 @@ export interface WeatherData {
   updatedAt: string;
 }
 
+export type GymUsageLevel = "LOW" | "MEDIUM" | "HIGH";
+
+export interface GymUsageData {
+  clubId: string;
+  currentPercentage: number;
+  level: GymUsageLevel;
+  day: string;
+  startTime: string;
+  endTime: string;
+  updatedAt: string;
+}
+
 export interface ApiError {
   error: string;
 }
