@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Line, LineChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Card } from "@/components/ui/Card";
 import type { ApiError, EtfData } from "@/types";
+import type { EtfConfig } from "@/lib/etf";
 
 function formatCurrency(value: number, currency: string) {
   return new Intl.NumberFormat("en-DE", {
@@ -18,11 +19,15 @@ function formatPct(value: number) {
   return `${sign}${value.toFixed(2)}%`;
 }
 
-export function EtfWidget() {
+interface EtfWidgetProps {
+  etf: EtfConfig;
+}
+
+export function EtfWidget({ etf }: EtfWidgetProps) {
   const { data, isLoading, isError, error } = useQuery<EtfData, Error>({
-    queryKey: ["etf", "vwce.de"],
+    queryKey: ["etf", etf.isin],
     queryFn: async () => {
-      const response = await fetch("/api/etf");
+      const response = await fetch(`/api/etf?isin=${encodeURIComponent(etf.isin)}`);
       const payload = (await response.json()) as EtfData | ApiError;
 
       if (!response.ok) {
@@ -37,7 +42,7 @@ export function EtfWidget() {
 
   if (isLoading) {
     return (
-      <Card title="ETF" subtitle="VWCE.DE">
+      <Card title="ETF" subtitle={etf.name}>
         <p className="text-sm text-slate-500">Loading ETF data...</p>
       </Card>
     );
@@ -45,7 +50,7 @@ export function EtfWidget() {
 
   if (isError || !data) {
     return (
-      <Card title="ETF" subtitle="VWCE.DE">
+      <Card title="ETF" subtitle={etf.name}>
         <p className="text-sm text-red-600">{error?.message ?? "Failed to load ETF data"}</p>
       </Card>
     );

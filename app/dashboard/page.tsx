@@ -1,3 +1,4 @@
+import { ETF_CONFIGS } from "@/lib/etf";
 import { EtfWidget } from "@/components/widgets/EtfWidget";
 import { GymWidget } from "@/components/widgets/GymWidget";
 import { MacroWidget } from "@/components/widgets/MacroWidget";
@@ -19,9 +20,9 @@ export default function DashboardPage() {
       </header>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="sm:col-span-2 lg:col-span-2">
-          <EtfWidget />
-        </div>
+        {ETF_CONFIGS.map((etf) => (
+          <EtfWidget key={etf.isin} etf={etf} />
+        ))}
         <WeatherWidget />
         <GymWidget />
         <div className="sm:col-span-2 lg:col-span-3">

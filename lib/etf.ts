@@ -1,11 +1,54 @@
 import type { EtfData } from "@/types";
 import { calcPctChange, toNumber } from "@/lib/utils";
 
-const YAHOO_CHART_URL =
-  "https://query1.finance.yahoo.com/v8/finance/chart/VWCE.DE?interval=1d&range=1mo&includePrePost=false&events=div%2Csplits";
+export interface EtfConfig {
+  isin: string;
+  symbol: string;
+  name: string;
+  currency: string;
+}
 
-export async function getEtfData(): Promise<EtfData> {
-  const response = await fetch(YAHOO_CHART_URL, {
+export const ETF_CONFIGS: EtfConfig[] = [
+  {
+    isin: "IE0031442068",
+    symbol: "IDUS.L",
+    name: "iShares Core S&P 500 UCITS ETF USD (Dist)",
+    currency: "USD",
+  },
+  {
+    isin: "DE0002635307",
+    symbol: "EXSA.DE",
+    name: "iShares STOXX Europe 600 UCITS ETF (DE) EUR (Dist)",
+    currency: "EUR",
+  },
+  {
+    isin: "IE00BD45KH83",
+    symbol: "EIMU.L",
+    name: "iShares Core MSCI EM IMI UCITS ETF USD (Dist)",
+    currency: "USD",
+  },
+];
+
+function getYahooChartUrl(symbol: string) {
+  return `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1mo&includePrePost=false&events=div%2Csplits`;
+}
+
+function getEtfConfig(identifier: string): EtfConfig {
+  const normalized = identifier.trim().toUpperCase();
+  const config = ETF_CONFIGS.find(
+    (entry) => entry.isin === normalized || entry.symbol.toUpperCase() === normalized,
+  );
+
+  if (!config) {
+    throw new Error(`Unsupported ETF: ${identifier}`);
+  }
+
+  return config;
+}
+
+export async function getEtfData(identifier: string): Promise<EtfData> {
+  const config = getEtfConfig(identifier);
+  const response = await fetch(getYahooChartUrl(config.symbol), {
     cache: "no-store",
     headers: {
       "user-agent": "Mozilla/5.0",
@@ -59,7 +102,7 @@ export async function getEtfData(): Promise<EtfData> {
   const meta = result?.meta;
 
   if (historyRows.length < 2 || !meta) {
-    throw new Error("Insufficient ETF history for VWCE.DE");
+    throw new Error(`Insufficient ETF history for ${config.symbol}`);
   }
 
   const latest = historyRows[historyRows.length - 1];
@@ -70,9 +113,9 @@ export async function getEtfData(): Promise<EtfData> {
     dailyChangePct > 0 ? "up" : dailyChangePct < 0 ? "down" : "flat";
 
   return {
-    symbol: meta.symbol ?? "VWCE.DE",
-    name: meta.longName ?? meta.shortName ?? "Vanguard FTSE All-World UCITS ETF",
-    currency: meta.currency ?? "EUR",
+    symbol: meta.symbol ?? config.symbol,
+    name: meta.longName ?? meta.shortName ?? config.name,
+    currency: meta.currency ?? config.currency,
     price: meta.regularMarketPrice ?? latest.close,
     dailyChangePct,
     trend,
@@ -82,4 +125,8 @@ export async function getEtfData(): Promise<EtfData> {
     })),
     updatedAt: new Date().toISOString(),
   };
+}
+
+export function resolveEtfFromIdentifier(identifier: string): EtfConfig {
+  return getEtfConfig(identifier);
 }
