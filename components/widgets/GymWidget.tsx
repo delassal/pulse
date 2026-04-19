@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Card } from "@/components/ui/Card";
+import { GymIcon } from "@/components/ui/Icons";
 import type { ApiError, GymUsageData } from "@/types";
 
 const LEVEL_TEXT_COLOR: Record<GymUsageData["level"], string> = {
@@ -36,7 +37,7 @@ export function GymWidget() {
 
   if (isLoading) {
     return (
-      <Card title="Gym" subtitle="Current usage">
+      <Card title="Gym" subtitle="Current usage" icon={<GymIcon className="h-5 w-5" />}>
         <p className="text-sm text-slate-500">Loading gym usage...</p>
       </Card>
     );
@@ -44,7 +45,7 @@ export function GymWidget() {
 
   if (isError || !data) {
     return (
-      <Card title="Gym" subtitle="Current usage">
+      <Card title="Gym" subtitle="Current usage" icon={<GymIcon className="h-5 w-5" />}>
         <p className="text-sm text-red-600">
           {error?.message ?? "Failed to load gym usage"}
         </p>
@@ -59,7 +60,7 @@ export function GymWidget() {
   }));
 
   return (
-    <Card title="Gym" subtitle="Fitness First - München Moosach">
+    <Card title="Gym" subtitle="Fitness First - München Moosach" icon={<GymIcon className="h-5 w-5" />}>
       <div className="space-y-3">
         <p className="text-3xl font-semibold text-slate-900">
           {Math.round(data.currentPercentage)}%

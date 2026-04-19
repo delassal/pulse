@@ -3,6 +3,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Line, LineChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Card } from "@/components/ui/Card";
+import {
+  AsiaOutlineIcon,
+  EuropeOutlineIcon,
+  UsOutlineIcon,
+} from "@/components/ui/Icons";
 import type { ApiError, EtfData } from "@/types";
 import type { EtfConfig } from "@/lib/etf";
 
@@ -24,6 +29,17 @@ function formatAsOf(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function getRegionIcon(region: EtfConfig["region"]) {
+  switch (region) {
+    case "us":
+      return <UsOutlineIcon className="h-5 w-5" />;
+    case "europe":
+      return <EuropeOutlineIcon className="h-5 w-5" />;
+    case "asia":
+      return <AsiaOutlineIcon className="h-5 w-5" />;
+  }
 }
 
 interface EtfWidgetProps {
@@ -49,7 +65,7 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
 
   if (isLoading) {
     return (
-      <Card title="ETF" subtitle={etf.name}>
+      <Card title={etf.displayName} subtitle={etf.name} icon={getRegionIcon(etf.region)}>
         <p className="text-sm text-slate-500">Loading ETF data...</p>
       </Card>
     );
@@ -57,7 +73,7 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
 
   if (isError || !data) {
     return (
-      <Card title="ETF" subtitle={etf.name}>
+      <Card title={etf.displayName} subtitle={etf.name} icon={getRegionIcon(etf.region)}>
         <p className="text-sm text-red-600">{error?.message ?? "Failed to load ETF data"}</p>
       </Card>
     );
@@ -71,7 +87,7 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
         : "text-slate-500";
 
   return (
-    <Card title="ETF" subtitle={data.name}>
+    <Card title={etf.displayName} subtitle={data.name} icon={getRegionIcon(etf.region)}>
       <div className="space-y-3">
         <div className="flex items-end justify-between gap-4">
           <div>

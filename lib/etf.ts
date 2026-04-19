@@ -6,6 +6,8 @@ export interface EtfConfig {
   symbol: string;
   name: string;
   currency: string;
+  displayName: string;
+  region: "us" | "europe" | "asia";
 }
 
 export const ETF_CONFIGS: EtfConfig[] = [
@@ -14,18 +16,24 @@ export const ETF_CONFIGS: EtfConfig[] = [
     symbol: "IDUS.L",
     name: "iShares Core S&P 500 UCITS ETF USD (Dist)",
     currency: "USD",
+    displayName: "S&P 500 (ETF)",
+    region: "us",
   },
   {
     isin: "DE0002635307",
     symbol: "EXSA.DE",
     name: "iShares STOXX Europe 600 UCITS ETF (DE) EUR (Dist)",
     currency: "EUR",
+    displayName: "STOXX Europe 600 (ETF)",
+    region: "europe",
   },
   {
     isin: "IE00BD45KH83",
     symbol: "EIMU.L",
     name: "iShares Core MSCI EM IMI UCITS ETF USD (Dist)",
     currency: "USD",
+    displayName: "Emerging Markets (ETF)",
+    region: "asia",
   },
 ];
 

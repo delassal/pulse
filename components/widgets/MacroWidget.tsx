@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
+import { MacroIcon } from "@/components/ui/Icons";
 import type { ApiError, MacroData } from "@/types";
 
 function formatValue(value: number, unit: string) {
@@ -31,7 +32,7 @@ export function MacroWidget() {
 
   if (isLoading) {
     return (
-      <Card title="Macro" subtitle="Inflation & Rates">
+      <Card title="Macro" subtitle="Inflation & Rates" icon={<MacroIcon className="h-5 w-5" />}>
         <p className="text-sm text-slate-500">Loading macro indicators...</p>
       </Card>
     );
@@ -39,7 +40,7 @@ export function MacroWidget() {
 
   if (isError || !data) {
     return (
-      <Card title="Macro" subtitle="Inflation & Rates">
+      <Card title="Macro" subtitle="Inflation & Rates" icon={<MacroIcon className="h-5 w-5" />}>
         <p className="text-sm text-red-600">
           {error?.message ?? "Failed to load macro indicators"}
         </p>
@@ -48,7 +49,7 @@ export function MacroWidget() {
   }
 
   return (
-    <Card title="Macro" subtitle={`Sources: ${data.sources.join(", ")}`}>
+    <Card title="Macro" subtitle={`Sources: ${data.sources.join(", ")}`} icon={<MacroIcon className="h-5 w-5" />}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {data.indicators.map((indicator) => {
           const change = indicator.change ?? 0;

@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
+import { WeatherIcon } from "@/components/ui/Icons";
 import type { ApiError, WeatherData } from "@/types";
 
 export function WeatherWidget() {
@@ -23,7 +24,7 @@ export function WeatherWidget() {
 
   if (isLoading) {
     return (
-      <Card title="Weather" subtitle="Munich">
+      <Card title="Weather" subtitle="Munich" icon={<WeatherIcon className="h-5 w-5" />}>
         <p className="text-sm text-slate-500">Loading weather...</p>
       </Card>
     );
@@ -31,7 +32,7 @@ export function WeatherWidget() {
 
   if (isError || !data) {
     return (
-      <Card title="Weather" subtitle="Munich">
+      <Card title="Weather" subtitle="Munich" icon={<WeatherIcon className="h-5 w-5" />}>
         <p className="text-sm text-red-600">
           {error?.message ?? "Failed to load weather"}
         </p>
@@ -40,7 +41,7 @@ export function WeatherWidget() {
   }
 
   return (
-    <Card title="Weather" subtitle={data.city}>
+    <Card title="Weather" subtitle={data.city} icon={<WeatherIcon className="h-5 w-5" />}>
       <div>
         <p className="text-3xl font-semibold text-slate-900">
           {Math.round(data.temperature)}&deg;{data.unit}
