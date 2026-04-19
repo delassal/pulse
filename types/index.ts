@@ -40,6 +40,14 @@ export interface WeatherData {
 
 export type GymUsageLevel = "LOW" | "MEDIUM" | "HIGH";
 
+export interface GymUsagePoint {
+  startTime: string;
+  endTime: string;
+  percentage: number;
+  level: GymUsageLevel;
+  isCurrent: boolean;
+}
+
 export interface GymUsageData {
   clubId: string;
   currentPercentage: number;
@@ -47,6 +55,7 @@ export interface GymUsageData {
   day: string;
   startTime: string;
   endTime: string;
+  timeline: GymUsagePoint[];
   updatedAt: string;
 }
 

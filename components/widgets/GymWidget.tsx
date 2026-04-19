@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Card } from "@/components/ui/Card";
 import type { ApiError, GymUsageData } from "@/types";
 
@@ -51,9 +52,15 @@ export function GymWidget() {
     );
   }
 
+  const chartData = data.timeline.map((point) => ({
+    label: point.startTime.slice(0, 5),
+    percentage: point.percentage,
+    isCurrent: point.isCurrent,
+  }));
+
   return (
-    <Card title="Gym" subtitle={`Club ${data.clubId}`}>
-      <div className="space-y-2">
+    <Card title="Gym" subtitle="Fitness First - München Moosach">
+      <div className="space-y-3">
         <p className="text-3xl font-semibold text-slate-900">
           {Math.round(data.currentPercentage)}%
         </p>
@@ -64,6 +71,33 @@ export function GymWidget() {
           {data.day.toUpperCase()} {data.startTime.slice(0, 5)}-
           {data.endTime.slice(0, 5)}
         </p>
+
+        <div className="h-20 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData}>
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 10 }}
+                interval="preserveStartEnd"
+                minTickGap={18}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip
+                formatter={(value) => `${Number(value)}%`}
+                labelFormatter={(label) => `${label} Uhr`}
+              />
+              <Bar dataKey="percentage" radius={[3, 3, 0, 0]}>
+                {chartData.map((entry) => (
+                  <Cell
+                    key={entry.label}
+                    fill={entry.isCurrent ? "#0f766e" : "#94a3b8"}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
     </Card>
   );

@@ -42,10 +42,15 @@ export async function getGymUsageData(): Promise<GymUsageData> {
   }
 
   const [day, todayData] = todayEntry;
+  const timeline = todayData.data?.items ?? [];
   const currentSlot = todayData.data?.items?.find((item) => item.isCurrent);
 
   if (!currentSlot) {
     throw new Error("No current gym usage slot found");
+  }
+
+  if (timeline.length === 0) {
+    throw new Error("No gym usage timeline found for current day");
   }
 
   return {
@@ -55,6 +60,13 @@ export async function getGymUsageData(): Promise<GymUsageData> {
     day,
     startTime: currentSlot.startTime,
     endTime: currentSlot.endTime,
+    timeline: timeline.map((item) => ({
+      startTime: item.startTime,
+      endTime: item.endTime,
+      percentage: item.percentage,
+      level: item.level,
+      isCurrent: item.isCurrent,
+    })),
     updatedAt: new Date().toISOString(),
   };
 }
