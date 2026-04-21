@@ -52,8 +52,9 @@ export interface GymUsagePoint {
 
 export interface GymUsageData {
   clubId: string;
-  currentPercentage: number;
-  level: GymUsageLevel;
+  currentPercentage: number | null;
+  level: GymUsageLevel | null;
+  isOpen: boolean;
   day: string;
   startTime: string;
   endTime: string;

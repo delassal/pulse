@@ -42,24 +42,27 @@ export async function getGymUsageData(): Promise<GymUsageData> {
   }
 
   const [day, todayData] = todayEntry;
-  const timeline = todayData.data?.items ?? [];
-  const currentSlot = todayData.data?.items?.find((item) => item.isCurrent);
-
-  if (!currentSlot) {
-    throw new Error("No current gym usage slot found");
-  }
+  const timeline = (todayData.data?.items ?? []).filter((item) => {
+    // Drop the rollover slot (for example 23:00-00:00) so the chart ends at closing time.
+    return item.endTime > item.startTime;
+  });
+  const currentSlot = timeline.find((item) => item.isCurrent);
 
   if (timeline.length === 0) {
     throw new Error("No gym usage timeline found for current day");
   }
 
+  const chartStartTime = timeline[0].startTime;
+  const chartEndTime = timeline[timeline.length - 1].endTime;
+
   return {
     clubId: FITNESS_FIRST_CLUB_ID,
-    currentPercentage: currentSlot.percentage,
-    level: currentSlot.level,
+    currentPercentage: currentSlot?.percentage ?? null,
+    level: currentSlot?.level ?? null,
+    isOpen: Boolean(currentSlot),
     day,
-    startTime: currentSlot.startTime,
-    endTime: currentSlot.endTime,
+    startTime: chartStartTime,
+    endTime: chartEndTime,
     timeline: timeline.map((item) => ({
       startTime: item.startTime,
       endTime: item.endTime,

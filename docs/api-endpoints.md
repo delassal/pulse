@@ -50,8 +50,9 @@ Implementation notes:
 
 Response:
 - clubId: string
-- currentPercentage: number
-- level: LOW | MEDIUM | HIGH
+- currentPercentage: number | null
+- level: LOW | MEDIUM | HIGH | null
+- isOpen: boolean
 - day: string
 - startTime: string (HH:mm:ss)
 - endTime: string (HH:mm:ss)

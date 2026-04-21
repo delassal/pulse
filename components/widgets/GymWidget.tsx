@@ -12,15 +12,15 @@ import {
 } from "recharts";
 import { Card } from "@/components/ui/Card";
 import { GymIcon } from "@/components/ui/Icons";
-import type { ApiError, GymUsageData } from "@/types";
+import type { ApiError, GymUsageData, GymUsageLevel } from "@/types";
 
-const LEVEL_TEXT_COLOR: Record<GymUsageData["level"], string> = {
+const LEVEL_TEXT_COLOR: Record<GymUsageLevel, string> = {
   LOW: "text-[color:var(--success)]",
   MEDIUM: "text-[color:var(--warning)]",
   HIGH: "text-[color:var(--danger)]",
 };
 
-const LEVEL_LABEL: Record<GymUsageData["level"], string> = {
+const LEVEL_LABEL: Record<GymUsageLevel, string> = {
   LOW: "Low",
   MEDIUM: "Medium",
   HIGH: "High",
@@ -129,22 +129,33 @@ export function GymWidget() {
 
   const chartData = data.timeline.map((point) => ({
     label: point.startTime.slice(0, 5),
+    endLabel: point.endTime.slice(0, 5),
     percentage: point.percentage,
     isCurrent: point.isCurrent,
   }));
+
+  const lastChartLabel = chartData[chartData.length - 1]?.label;
+  const chartClosingLabel = chartData[chartData.length - 1]?.endLabel;
 
   return (
     <Card title="Gym" subtitle="Fitness First - München Moosach" icon={<GymIcon className="h-5 w-5" />}>
       <div className="space-y-3">
         <p className="theme-text text-3xl font-semibold">
-          {Math.round(data.currentPercentage)}%
+          {data.isOpen && typeof data.currentPercentage === "number"
+            ? `${Math.round(data.currentPercentage)}%`
+            : "Gym closed"}
         </p>
-        <p className={`text-sm font-medium ${LEVEL_TEXT_COLOR[data.level]}`}>
-          {LEVEL_LABEL[data.level]} occupancy
-        </p>
+        {data.isOpen && data.level ? (
+          <p className={`text-sm font-medium ${LEVEL_TEXT_COLOR[data.level]}`}>
+            {LEVEL_LABEL[data.level]} occupancy
+          </p>
+        ) : (
+          <p className="theme-muted text-sm font-medium">No live occupancy outside opening hours</p>
+        )}
         <p className="theme-muted text-xs">
-          {data.day.toUpperCase()} {data.startTime.slice(0, 5)}-
-          {data.endTime.slice(0, 5)}
+          {data.isOpen
+            ? `${data.day.toUpperCase()} ${data.startTime.slice(0, 5)}-${data.endTime.slice(0, 5)}`
+            : `${data.day.toUpperCase()} opening hours ${data.startTime.slice(0, 5)}-${data.endTime.slice(0, 5)}`}
         </p>
 
         <div ref={setChartContainerElement} className="h-20 w-full min-w-0">
@@ -153,6 +164,13 @@ export function GymWidget() {
               <XAxis
                 dataKey="label"
                 tick={{ fontSize: 10, fill: "var(--muted)" }}
+                tickFormatter={(value: string) => {
+                  if (value === lastChartLabel && chartClosingLabel) {
+                    return chartClosingLabel;
+                  }
+
+                  return value;
+                }}
                 interval="preserveStartEnd"
                 minTickGap={18}
                 axisLine={false}
