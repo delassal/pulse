@@ -62,6 +62,54 @@ function formatMonthTick(value: string) {
   );
 }
 
+function getDateTimePartsInZone(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(date);
+
+  const weekday = parts.find((part) => part.type === "weekday")?.value;
+  const hour = Number(parts.find((part) => part.type === "hour")?.value);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value);
+
+  return { weekday, hour, minute };
+}
+
+function isWithinTradingHours(symbol: string, now = new Date()) {
+  const normalized = symbol.toUpperCase();
+
+  if (normalized.endsWith(".L")) {
+    const { weekday, hour, minute } = getDateTimePartsInZone(now, "Europe/London");
+    if (weekday === "Sat" || weekday === "Sun") {
+      return false;
+    }
+
+    const totalMinutes = hour * 60 + minute;
+    return totalMinutes >= 8 * 60 && totalMinutes < 16 * 60 + 30;
+  }
+
+  if (normalized.endsWith(".DE")) {
+    const { weekday, hour, minute } = getDateTimePartsInZone(now, "Europe/Berlin");
+    if (weekday === "Sat" || weekday === "Sun") {
+      return false;
+    }
+
+    const totalMinutes = hour * 60 + minute;
+    return totalMinutes >= 9 * 60 && totalMinutes < 17 * 60 + 30;
+  }
+
+  const { weekday, hour, minute } = getDateTimePartsInZone(now, "America/New_York");
+  if (weekday === "Sat" || weekday === "Sun") {
+    return false;
+  }
+
+  const totalMinutes = hour * 60 + minute;
+  return totalMinutes >= 9 * 60 + 30 && totalMinutes < 16 * 60;
+}
+
 function getMonthTicks(history: EtfData["history"]) {
   return history.filter((point, index) => {
     const previousMonth = history[index - 1]?.date.slice(0, 7);
@@ -166,6 +214,7 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
         ? "text-rose-600"
         : "text-slate-500";
   const monthTicks = getMonthTicks(data.history);
+  const showDailyChange = isWithinTradingHours(data.symbol);
 
   return (
     <Card title={etf.displayName} subtitle={data.name} icon={getRegionIcon(etf.region)}>
@@ -177,9 +226,11 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
             <p className="text-3xl font-semibold tracking-tight text-slate-900">
               {formatCurrency(data.price, data.currency)}
             </p>
-            <p className={`text-sm font-medium ${changeColor}`}>
-              {formatPct(data.dailyChangePct)} today
-            </p>
+            {showDailyChange ? (
+              <p className={`text-sm font-medium ${changeColor}`}>
+                {formatPct(data.dailyChangePct)} today
+              </p>
+            ) : null}
           </div>
 
           <div className={`text-right ${ytdColor}`}>
