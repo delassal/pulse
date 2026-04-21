@@ -1,11 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bar,
   BarChart,
   Cell,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   type TooltipContentProps,
@@ -58,6 +58,41 @@ function renderGymTooltip() {
 }
 
 export function GymWidget() {
+  const [chartContainerElement, setChartContainerElement] = useState<HTMLDivElement | null>(null);
+  const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (!chartContainerElement) {
+      return;
+    }
+
+    const updateSize = () => {
+      const { width, height } = chartContainerElement.getBoundingClientRect();
+      const nextWidth = Math.max(0, Math.floor(width));
+      const nextHeight = Math.max(0, Math.floor(height));
+
+      setChartSize((previous) => {
+        if (previous.width === nextWidth && previous.height === nextHeight) {
+          return previous;
+        }
+
+        return { width: nextWidth, height: nextHeight };
+      });
+    };
+
+    updateSize();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateSize();
+    });
+
+    resizeObserver.observe(chartContainerElement);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [chartContainerElement]);
+
   const { data, isLoading, isError, error } = useQuery<GymUsageData, Error>({
     queryKey: ["gym", "usage", "2405764950"],
     queryFn: async () => {
@@ -112,9 +147,9 @@ export function GymWidget() {
           {data.endTime.slice(0, 5)}
         </p>
 
-        <div className="h-20 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData}>
+        <div ref={setChartContainerElement} className="h-20 w-full min-w-0">
+          {chartSize.width > 0 && chartSize.height > 0 ? (
+            <BarChart width={chartSize.width} height={chartSize.height} data={chartData}>
               <XAxis
                 dataKey="label"
                 tick={{ fontSize: 10, fill: "var(--muted)" }}
@@ -136,7 +171,7 @@ export function GymWidget() {
                 ))}
               </Bar>
             </BarChart>
-          </ResponsiveContainer>
+          ) : null}
         </div>
       </div>
     </Card>

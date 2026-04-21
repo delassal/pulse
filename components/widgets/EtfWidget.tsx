@@ -1,12 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Area,
   CartesianGrid,
   ComposedChart,
   Line,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -162,6 +162,41 @@ interface EtfWidgetProps {
 }
 
 export function EtfWidget({ etf }: EtfWidgetProps) {
+  const [chartContainerElement, setChartContainerElement] = useState<HTMLDivElement | null>(null);
+  const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (!chartContainerElement) {
+      return;
+    }
+
+    const updateSize = () => {
+      const { width, height } = chartContainerElement.getBoundingClientRect();
+      const nextWidth = Math.max(0, Math.floor(width));
+      const nextHeight = Math.max(0, Math.floor(height));
+
+      setChartSize((previous) => {
+        if (previous.width === nextWidth && previous.height === nextHeight) {
+          return previous;
+        }
+
+        return { width: nextWidth, height: nextHeight };
+      });
+    };
+
+    updateSize();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateSize();
+    });
+
+    resizeObserver.observe(chartContainerElement);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [chartContainerElement]);
+
   const { data, isLoading, isError, error } = useQuery<EtfData, Error>({
     queryKey: ["etf", etf.isin],
     queryFn: async () => {
@@ -243,9 +278,14 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
           </div>
         </div>
 
-        <div className="h-32 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={data.history} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+        <div ref={setChartContainerElement} className="h-32 w-full min-w-0">
+          {chartSize.width > 0 && chartSize.height > 0 ? (
+            <ComposedChart
+              width={chartSize.width}
+              height={chartSize.height}
+              data={data.history}
+              margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+            >
               <defs>
                 <linearGradient id={`etf-fill-${etf.isin}`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="4%" stopColor={chartColor} stopOpacity={0.38} />
@@ -300,7 +340,7 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
                 style={{ filter: `url(#etf-line-glow-${etf.isin})` }}
               />
             </ComposedChart>
-          </ResponsiveContainer>
+          ) : null}
         </div>
       </div>
     </Card>
