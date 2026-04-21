@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
   Tooltip,
   XAxis,
+  YAxis,
 } from "recharts";
 import { Card } from "@/components/ui/Card";
 import {
@@ -215,6 +216,13 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
         : "text-slate-500";
   const monthTicks = getMonthTicks(data.history);
   const showDailyChange = isWithinTradingHours(data.symbol);
+  const chartColor = showDailyChange
+    ? data.trend === "down"
+      ? "#dc2626"
+      : data.trend === "up"
+        ? "#16a34a"
+        : "#64748b"
+    : "#94a3b8";
 
   return (
     <Card title={etf.displayName} subtitle={data.name} icon={getRegionIcon(etf.region)}>
@@ -243,16 +251,33 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
           </div>
         </div>
 
-        <div className="h-28 w-full">
+        <div className="h-32 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data.history} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id={`etf-fill-${etf.isin}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={data.trend === "down" ? "#ef4444" : "#16a34a"} stopOpacity={0.24} />
-                  <stop offset="95%" stopColor={data.trend === "down" ? "#ef4444" : "#16a34a"} stopOpacity={0} />
+                  <stop offset="4%" stopColor={chartColor} stopOpacity={0.38} />
+                  <stop offset="70%" stopColor={chartColor} stopOpacity={0.12} />
+                  <stop offset="100%" stopColor={chartColor} stopOpacity={0.02} />
                 </linearGradient>
+                <filter id={`etf-line-glow-${etf.isin}`} x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow
+                    dx="0"
+                    dy="1"
+                    stdDeviation="1.6"
+                    floodColor={chartColor}
+                    floodOpacity="0.35"
+                  />
+                </filter>
               </defs>
-              <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" vertical />
+              <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 4" vertical={false} />
+                <YAxis
+                  hide
+                  domain={[
+                    (dataMin: number) => dataMin - Math.max(Math.abs(dataMin) * 0.01, 0.5),
+                    (dataMax: number) => dataMax + Math.max(Math.abs(dataMax) * 0.01, 0.5),
+                  ]}
+                />
               <XAxis
                 dataKey="date"
                 ticks={monthTicks}
@@ -261,6 +286,7 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
                 axisLine={false}
                 tickLine={false}
                 minTickGap={18}
+                interval="preserveStartEnd"
               />
               <Tooltip
                 cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3" }}
@@ -275,10 +301,11 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
               <Line
                 type="monotone"
                 dataKey="price"
-                stroke={data.trend === "down" ? "#dc2626" : "#16a34a"}
-                strokeWidth={2}
+                  stroke={chartColor}
+                strokeWidth={2.8}
                 dot={false}
-                activeDot={{ r: 3 }}
+                activeDot={{ r: 4, stroke: "#ffffff", strokeWidth: 1.5 }}
+                style={{ filter: `url(#etf-line-glow-${etf.isin})` }}
               />
             </ComposedChart>
           </ResponsiveContainer>
