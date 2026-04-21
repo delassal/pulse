@@ -1,15 +1,23 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  type TooltipContentProps,
+} from "recharts";
 import { Card } from "@/components/ui/Card";
 import { GymIcon } from "@/components/ui/Icons";
 import type { ApiError, GymUsageData } from "@/types";
 
 const LEVEL_TEXT_COLOR: Record<GymUsageData["level"], string> = {
-  LOW: "text-emerald-600",
-  MEDIUM: "text-amber-600",
-  HIGH: "text-rose-600",
+  LOW: "text-[color:var(--success)]",
+  MEDIUM: "text-[color:var(--warning)]",
+  HIGH: "text-[color:var(--danger)]",
 };
 
 const LEVEL_LABEL: Record<GymUsageData["level"], string> = {
@@ -24,16 +32,7 @@ function formatGymTooltipLabel(value: string) {
 }
 
 function renderGymTooltip() {
-  return function TooltipContent(props: any) {
-    const {
-      active,
-      label,
-      payload,
-    }: {
-      active?: boolean;
-      label?: string | number;
-      payload?: ReadonlyArray<{ value?: number }>;
-    } = props;
+  return function TooltipContent({ active, label, payload }: TooltipContentProps) {
 
     if (!active || !payload?.length) {
       return null;
@@ -46,11 +45,11 @@ function renderGymTooltip() {
     }
 
     return (
-      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg">
-        <p className="text-xs font-medium text-slate-500">
+      <div className="theme-tooltip rounded-xl px-3 py-2">
+        <p className="theme-muted text-xs font-medium">
           {formatGymTooltipLabel(String(label ?? ""))}
         </p>
-        <p className="mt-1 text-sm font-semibold text-slate-900">
+        <p className="theme-text mt-1 text-sm font-semibold">
           {Math.round(value)}%
         </p>
       </div>
@@ -78,7 +77,7 @@ export function GymWidget() {
   if (isLoading) {
     return (
       <Card title="Gym" subtitle="Current usage" icon={<GymIcon className="h-5 w-5" />}>
-        <p className="text-sm text-slate-500">Loading gym usage...</p>
+        <p className="theme-muted text-sm">Loading gym usage...</p>
       </Card>
     );
   }
@@ -86,7 +85,7 @@ export function GymWidget() {
   if (isError || !data) {
     return (
       <Card title="Gym" subtitle="Current usage" icon={<GymIcon className="h-5 w-5" />}>
-        <p className="text-sm text-red-600">
+        <p className="text-sm text-[color:var(--danger)]">
           {error?.message ?? "Failed to load gym usage"}
         </p>
       </Card>
@@ -102,13 +101,13 @@ export function GymWidget() {
   return (
     <Card title="Gym" subtitle="Fitness First - München Moosach" icon={<GymIcon className="h-5 w-5" />}>
       <div className="space-y-3">
-        <p className="text-3xl font-semibold text-slate-900">
+        <p className="theme-text text-3xl font-semibold">
           {Math.round(data.currentPercentage)}%
         </p>
         <p className={`text-sm font-medium ${LEVEL_TEXT_COLOR[data.level]}`}>
           {LEVEL_LABEL[data.level]} occupancy
         </p>
-        <p className="text-xs text-slate-500">
+        <p className="theme-muted text-xs">
           {data.day.toUpperCase()} {data.startTime.slice(0, 5)}-
           {data.endTime.slice(0, 5)}
         </p>
@@ -118,21 +117,21 @@ export function GymWidget() {
             <BarChart data={chartData}>
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 10, fill: "var(--muted)" }}
                 interval="preserveStartEnd"
                 minTickGap={18}
                 axisLine={false}
                 tickLine={false}
               />
               <Tooltip
-                cursor={{ fill: "rgba(148, 163, 184, 0.12)" }}
+                cursor={{ fill: "var(--accent-soft)" }}
                 content={renderGymTooltip()}
               />
               <Bar dataKey="percentage" radius={[3, 3, 0, 0]}>
                 {chartData.map((entry) => (
                   <Cell
                     key={entry.label}
-                    fill={entry.isCurrent ? "#0f766e" : "#94a3b8"}
+                    fill={entry.isCurrent ? "var(--accent)" : "var(--subtle)"}
                   />
                 ))}
               </Bar>

@@ -4,6 +4,7 @@ import { GymWidget } from "@/components/widgets/GymWidget";
 import { MacroWidget } from "@/components/widgets/MacroWidget";
 import { WeatherWidget } from "@/components/widgets/WeatherWidget";
 import { FinancialsIcon, MacroIcon, PersonalIcon } from "@/components/ui/Icons";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import type { ReactNode } from "react";
 
 function SectionHeader({
@@ -17,14 +18,14 @@ function SectionHeader({
 }) {
   return (
     <header className="mb-3 flex items-start gap-3">
-      <div className="flex h-10 w-10 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm">
+      <div className="theme-icon-shell flex h-10 w-10 flex-none items-center justify-center rounded-2xl shadow-sm">
         {icon}
       </div>
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <p className="theme-muted text-xs font-semibold uppercase tracking-[0.18em]">
           {title}
         </p>
-        <p className="mt-1 text-sm text-slate-600">{description}</p>
+        <p className="theme-subtle mt-1 text-sm">{description}</p>
       </div>
     </header>
   );
@@ -33,16 +34,19 @@ function SectionHeader({
 export default function DashboardPage() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-6 sm:px-6 sm:py-8">
-      <header className="mb-6">
-        <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
-          Morning Briefing
-        </p>
-        <h1 className="mt-1 text-3xl font-semibold text-slate-900 sm:text-4xl">
-          Pulse
-        </h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Daniel's quick snapshot of important signals.
-        </p>
+      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="theme-muted text-xs font-medium uppercase tracking-[0.2em]">
+            Morning Briefing
+          </p>
+          <h1 className="theme-text mt-1 text-3xl font-semibold sm:text-4xl">
+            Pulse
+          </h1>
+          <p className="theme-subtle mt-2 text-sm">
+            Daniel&apos;s quick snapshot of important signals.
+          </p>
+        </div>
+        <ThemeToggle />
       </header>
 
       <div className="space-y-8">

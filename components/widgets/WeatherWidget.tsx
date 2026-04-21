@@ -25,7 +25,7 @@ export function WeatherWidget() {
   if (isLoading) {
     return (
       <Card title="Weather" subtitle="Munich" icon={<WeatherIcon className="h-5 w-5" />}>
-        <p className="text-sm text-slate-500">Loading weather...</p>
+        <p className="theme-muted text-sm">Loading weather...</p>
       </Card>
     );
   }
@@ -33,7 +33,7 @@ export function WeatherWidget() {
   if (isError || !data) {
     return (
       <Card title="Weather" subtitle="Munich" icon={<WeatherIcon className="h-5 w-5" />}>
-        <p className="text-sm text-red-600">
+        <p className="text-sm text-[color:var(--danger)]">
           {error?.message ?? "Failed to load weather"}
         </p>
       </Card>
@@ -43,10 +43,10 @@ export function WeatherWidget() {
   return (
     <Card title="Weather" subtitle={data.city} icon={<WeatherIcon className="h-5 w-5" />}>
       <div>
-        <p className="text-3xl font-semibold text-slate-900">
+        <p className="theme-text text-3xl font-semibold">
           {Math.round(data.temperature)}&deg;{data.unit}
         </p>
-        <p className="mt-1 text-sm text-slate-600">{data.condition}</p>
+        <p className="theme-subtle mt-1 text-sm">{data.condition}</p>
       </div>
     </Card>
   );

@@ -33,7 +33,7 @@ export function MacroWidget() {
   if (isLoading) {
     return (
       <Card title="Macro" subtitle="Inflation & Rates" icon={<MacroIcon className="h-5 w-5" />}>
-        <p className="text-sm text-slate-500">Loading macro indicators...</p>
+        <p className="theme-muted text-sm">Loading macro indicators...</p>
       </Card>
     );
   }
@@ -41,7 +41,7 @@ export function MacroWidget() {
   if (isError || !data) {
     return (
       <Card title="Macro" subtitle="Inflation & Rates" icon={<MacroIcon className="h-5 w-5" />}>
-        <p className="text-sm text-red-600">
+        <p className="text-sm text-[color:var(--danger)]">
           {error?.message ?? "Failed to load macro indicators"}
         </p>
       </Card>
@@ -55,18 +55,18 @@ export function MacroWidget() {
           const change = indicator.change ?? 0;
           const changeColor =
             change > 0
-              ? "text-emerald-600"
+              ? "text-[color:var(--success)]"
               : change < 0
-                ? "text-rose-600"
-                : "text-slate-500";
+                ? "text-[color:var(--danger)]"
+                : "theme-muted";
 
           return (
             <div
               key={indicator.label}
-              className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+              className="theme-panel rounded-xl p-3"
             >
-              <p className="text-xs text-slate-500">{indicator.label}</p>
-              <p className="text-2xl font-semibold text-slate-900">
+              <p className="theme-muted text-xs">{indicator.label}</p>
+              <p className="theme-text text-2xl font-semibold">
                 {formatValue(indicator.value, indicator.unit)}
               </p>
               <p className={`text-xs ${changeColor}`}>

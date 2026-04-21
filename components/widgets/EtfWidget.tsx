@@ -10,6 +10,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  type TooltipContentProps,
 } from "recharts";
 import { Card } from "@/components/ui/Card";
 import {
@@ -119,16 +120,7 @@ function getMonthTicks(history: EtfData["history"]) {
 }
 
 function renderTooltip(currency: string) {
-  return function TooltipContent(props: any) {
-    const {
-      active,
-      label,
-      payload,
-    }: {
-      active?: boolean;
-      label?: string | number;
-      payload?: ReadonlyArray<{ value?: number; payload?: { date?: string } }>;
-    } = props;
+  return function TooltipContent({ active, label, payload }: TooltipContentProps) {
 
     if (!active || !payload?.length) {
       return null;
@@ -142,11 +134,11 @@ function renderTooltip(currency: string) {
     }
 
     return (
-      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg">
-        <p className="text-xs font-medium text-slate-500">
+      <div className="theme-tooltip rounded-xl px-3 py-2">
+        <p className="theme-muted text-xs font-medium">
           {formatTooltipDate(String(label ?? point.date))}
         </p>
-        <p className="mt-1 text-sm font-semibold text-slate-900">
+        <p className="theme-text mt-1 text-sm font-semibold">
           {formatCurrency(value, currency)}
         </p>
       </div>
@@ -189,7 +181,7 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
   if (isLoading) {
     return (
       <Card title={etf.displayName} subtitle={etf.name} icon={getRegionIcon(etf.region)}>
-        <p className="text-sm text-slate-500">Loading ETF data...</p>
+        <p className="theme-muted text-sm">Loading ETF data...</p>
       </Card>
     );
   }
@@ -197,41 +189,41 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
   if (isError || !data) {
     return (
       <Card title={etf.displayName} subtitle={etf.name} icon={getRegionIcon(etf.region)}>
-        <p className="text-sm text-red-600">{error?.message ?? "Failed to load ETF data"}</p>
+        <p className="text-sm text-[color:var(--danger)]">{error?.message ?? "Failed to load ETF data"}</p>
       </Card>
     );
   }
 
   const changeColor =
     data.trend === "up"
-      ? "text-emerald-600"
+      ? "text-[color:var(--success)]"
       : data.trend === "down"
-        ? "text-rose-600"
-        : "text-slate-500";
+        ? "text-[color:var(--danger)]"
+        : "theme-muted";
   const ytdColor =
     data.ytdChangePct > 0
-      ? "text-emerald-600"
+      ? "text-[color:var(--success)]"
       : data.ytdChangePct < 0
-        ? "text-rose-600"
-        : "text-slate-500";
+        ? "text-[color:var(--danger)]"
+        : "theme-muted";
   const monthTicks = getMonthTicks(data.history);
   const showDailyChange = isWithinTradingHours(data.symbol);
   const chartColor = showDailyChange
     ? data.trend === "down"
-      ? "#dc2626"
+      ? "var(--danger)"
       : data.trend === "up"
-        ? "#16a34a"
-        : "#64748b"
-    : "#94a3b8";
+        ? "var(--success)"
+        : "var(--subtle)"
+    : "var(--subtle)";
 
   return (
     <Card title={etf.displayName} subtitle={data.name} icon={getRegionIcon(etf.region)}>
       <div className="space-y-3">
-        <p className="text-xs text-slate-500">As of {formatAsOf(data.asOf)}</p>
+        <p className="theme-muted text-xs">As of {formatAsOf(data.asOf)}</p>
 
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
           <div className="min-w-0">
-            <p className="text-3xl font-semibold tracking-tight text-slate-900">
+            <p className="theme-text text-3xl font-semibold tracking-tight">
               {formatCurrency(data.price, data.currency)}
             </p>
             {showDailyChange ? (
@@ -242,7 +234,7 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
           </div>
 
           <div className={`text-right ${ytdColor}`}>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            <p className="theme-muted text-[11px] font-semibold uppercase tracking-[0.18em]">
               YTD
             </p>
             <p className="text-2xl font-semibold leading-none">
@@ -270,7 +262,7 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
                   />
                 </filter>
               </defs>
-              <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 4" vertical={false} />
+              <CartesianGrid stroke="var(--grid)" strokeDasharray="3 4" vertical={false} />
                 <YAxis
                   hide
                   domain={[
@@ -282,14 +274,14 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
                 dataKey="date"
                 ticks={monthTicks}
                 tickFormatter={formatMonthTick}
-                tick={{ fontSize: 10, fill: "#64748b" }}
+                tick={{ fontSize: 10, fill: "var(--muted)" }}
                 axisLine={false}
                 tickLine={false}
                 minTickGap={18}
                 interval="preserveStartEnd"
               />
               <Tooltip
-                cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3" }}
+                cursor={{ stroke: "var(--grid)", strokeDasharray: "3 3" }}
                 content={renderTooltip(data.currency)}
               />
               <Area
@@ -301,10 +293,10 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
               <Line
                 type="monotone"
                 dataKey="price"
-                  stroke={chartColor}
+                stroke={chartColor}
                 strokeWidth={2.8}
                 dot={false}
-                activeDot={{ r: 4, stroke: "#ffffff", strokeWidth: 1.5 }}
+                activeDot={{ r: 4, stroke: "var(--surface-strong)", strokeWidth: 1.5 }}
                 style={{ filter: `url(#etf-line-glow-${etf.isin})` }}
               />
             </ComposedChart>
