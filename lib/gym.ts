@@ -42,10 +42,7 @@ export async function getGymUsageData(): Promise<GymUsageData> {
   }
 
   const [day, todayData] = todayEntry;
-  const timeline = (todayData.data?.items ?? []).filter((item) => {
-    // Drop the rollover slot (for example 23:00-00:00) so the chart ends at closing time.
-    return item.endTime > item.startTime;
-  });
+  const timeline = todayData.data?.items ?? [];
   const currentSlot = timeline.find((item) => item.isCurrent);
 
   if (timeline.length === 0) {
