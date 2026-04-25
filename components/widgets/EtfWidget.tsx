@@ -7,6 +7,7 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
+  ReferenceLine,
   Tooltip,
   XAxis,
   YAxis,
@@ -250,6 +251,8 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
         ? "var(--success)"
         : "var(--subtle)"
     : "var(--subtle)";
+    const firstHistoryPrice = data.history[0]?.price;
+  const referenceLineColor = "var(--muted)";
 
   return (
     <Card title={etf.displayName} subtitle={data.name} icon={getRegionIcon(etf.region)}>
@@ -303,6 +306,14 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
                 </filter>
               </defs>
               <CartesianGrid stroke="var(--grid)" strokeDasharray="3 4" vertical={false} />
+              {firstHistoryPrice !== undefined ? (
+                <ReferenceLine
+                  y={firstHistoryPrice}
+                  stroke={referenceLineColor}
+                  strokeDasharray="6 4"
+                  strokeWidth={1.5}
+                />
+              ) : null}
                 <YAxis
                   hide
                   domain={[

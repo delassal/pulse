@@ -36,9 +36,6 @@ export default function DashboardPage() {
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-6 sm:px-6 sm:py-8">
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="theme-muted text-xs font-medium uppercase tracking-[0.2em]">
-            Morning Briefing
-          </p>
           <h1 className="theme-text mt-1 text-3xl font-semibold sm:text-4xl">
             Pulse
           </h1>
