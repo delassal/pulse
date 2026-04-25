@@ -3,7 +3,7 @@
 Pulse is a mobile-first personal dashboard MVP that surfaces a quick morning briefing:
 
 - ETF snapshot for VWCE.DE
-- Macro indicators (EU-first with fallback)
+- Macro & markets briefing (daily market pulse + structural macro context)
 - Weather for a configurable city (default: Munich)
 - Current gym occupancy for Fitness First club 2405764950
 

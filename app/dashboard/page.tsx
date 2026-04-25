@@ -74,8 +74,8 @@ export default function DashboardPage() {
 
         <section>
           <SectionHeader
-            title="Macro"
-            description="Broader economic backdrop and policy signals."
+            title="Macro & Markets"
+            description="Morning briefing: market pulse first, structural backdrop second."
             icon={<MacroIcon className="h-5 w-5" />}
           />
           <div className="grid grid-cols-1 gap-4">

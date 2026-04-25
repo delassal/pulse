@@ -9,6 +9,14 @@ const ECB_POLICY_RATE_URL =
 const FRED_CPI_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPIAUCSL";
 const FRED_FEDFUNDS_URL =
   "https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS";
+const FRED_VIX_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=VIXCLS";
+const FRED_US_10Y_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10";
+const FRED_US_2Y_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS2";
+const FRED_EURUSD_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DEXUSEU";
+const FRED_OIL_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILWTICO";
+const FRED_GOLD_URL =
+  "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GOLDAMGBD228NLBM";
+const FRED_PMI_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=NAPM";
 
 interface SeriesPoint {
   date: string;
@@ -70,6 +78,26 @@ function latestWithChange(points: SeriesPoint[]) {
   };
 }
 
+function spreadSeries(left: SeriesPoint[], right: SeriesPoint[]): SeriesPoint[] {
+  const rightByDate = new Map(right.map((point) => [point.date, point.value]));
+
+  return left
+    .map((point) => {
+      const rightValue = rightByDate.get(point.date);
+
+      if (rightValue === undefined) {
+        return null;
+      }
+
+      return {
+        date: point.date,
+        value: point.value - rightValue,
+      };
+    })
+    .filter((point): point is SeriesPoint => point !== null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 async function fetchEcbInflation(): Promise<MacroIndicator> {
   const points = await fetchCsvSeries(
     ECB_INFLATION_URL,
@@ -79,6 +107,7 @@ async function fetchEcbInflation(): Promise<MacroIndicator> {
   const { latest, change } = latestWithChange(points);
 
   return {
+    id: "inflation_euro_area",
     label: "Inflation (Euro Area)",
     value: latest,
     change,
@@ -96,6 +125,7 @@ async function fetchEcbPolicyRate(): Promise<MacroIndicator> {
     const { latest, change } = latestWithChange(points);
 
     return {
+      id: "policy_rate_ecb",
       label: "ECB Policy Rate",
       value: latest,
       change,
@@ -110,6 +140,7 @@ async function fetchEcbPolicyRate(): Promise<MacroIndicator> {
     const { latest, change } = latestWithChange(points);
 
     return {
+      id: "policy_rate_fed_fallback",
       label: "Fed Funds Rate (fallback)",
       value: latest,
       change,
@@ -138,6 +169,7 @@ async function fetchUsInflationFallback(): Promise<MacroIndicator> {
   const previousYoy = ((previous - previousPriorYear) / previousPriorYear) * 100;
 
   return {
+    id: "inflation_us_fallback",
     label: "Inflation (US, fallback)",
     value: yoy,
     change: yoy - previousYoy,
@@ -145,20 +177,134 @@ async function fetchUsInflationFallback(): Promise<MacroIndicator> {
   };
 }
 
-async function fetchUsRateFallback(): Promise<MacroIndicator> {
+async function fetchVix(): Promise<MacroIndicator> {
   const points = await fetchCsvSeries(
-    FRED_FEDFUNDS_URL,
+    FRED_VIX_URL,
     ["observation_date"],
-    ["FEDFUNDS"],
+    ["VIXCLS"],
   );
   const { latest, change } = latestWithChange(points);
 
   return {
-    label: "Fed Funds Rate (fallback)",
+    id: "vix",
+    label: "Volatility (VIX)",
+    value: latest,
+    change,
+    unit: "idx",
+  };
+}
+
+async function fetchUs10yYield(): Promise<MacroIndicator> {
+  const points = await fetchCsvSeries(
+    FRED_US_10Y_URL,
+    ["observation_date"],
+    ["DGS10"],
+  );
+  const { latest, change } = latestWithChange(points);
+
+  return {
+    id: "us_10y_yield",
+    label: "US 10Y Yield",
     value: latest,
     change,
     unit: "%",
   };
+}
+
+async function fetchEurUsd(): Promise<MacroIndicator> {
+  const points = await fetchCsvSeries(
+    FRED_EURUSD_URL,
+    ["observation_date"],
+    ["DEXUSEU"],
+  );
+  const { latest, change } = latestWithChange(points);
+
+  return {
+    id: "eur_usd",
+    label: "EUR/USD",
+    value: latest,
+    change,
+    unit: "rate",
+  };
+}
+
+async function fetchOil(): Promise<MacroIndicator> {
+  const points = await fetchCsvSeries(
+    FRED_OIL_URL,
+    ["observation_date"],
+    ["DCOILWTICO"],
+  );
+  const { latest, change } = latestWithChange(points);
+
+  return {
+    id: "oil_wti",
+    label: "Oil (WTI)",
+    value: latest,
+    change,
+    unit: "$",
+  };
+}
+
+async function fetchGold(): Promise<MacroIndicator> {
+  const points = await fetchCsvSeries(
+    FRED_GOLD_URL,
+    ["observation_date"],
+    ["GOLDAMGBD228NLBM"],
+  );
+  const { latest, change } = latestWithChange(points);
+
+  return {
+    id: "gold",
+    label: "Gold",
+    value: latest,
+    change,
+    unit: "$",
+  };
+}
+
+async function fetchPmi(): Promise<MacroIndicator> {
+  const points = await fetchCsvSeries(
+    FRED_PMI_URL,
+    ["observation_date"],
+    ["NAPM"],
+  );
+  const { latest, change } = latestWithChange(points);
+
+  return {
+    id: "pmi",
+    label: "PMI (US ISM)",
+    value: latest,
+    change,
+    unit: "idx",
+  };
+}
+
+async function fetchYieldCurve(): Promise<MacroIndicator> {
+  const [longTerm, shortTerm] = await Promise.all([
+    fetchCsvSeries(FRED_US_10Y_URL, ["observation_date"], ["DGS10"]),
+    fetchCsvSeries(FRED_US_2Y_URL, ["observation_date"], ["DGS2"]),
+  ]);
+
+  const spreads = spreadSeries(longTerm, shortTerm);
+  const { latest, change } = latestWithChange(spreads);
+
+  return {
+    id: "yield_curve_10y_2y",
+    label: "Yield Curve (10Y-2Y)",
+    value: latest,
+    change,
+    unit: "pp",
+  };
+}
+
+function fulfilledValues<T>(results: PromiseSettledResult<T>[]): T[] {
+  return results.flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : [],
+  );
+}
+
+function hasAnyFailure<T>(results: PromiseSettledResult<T>[]) {
+  return results.some((result) => result.status === "rejected");
 }
 
 export async function getMacroData(): Promise<MacroData> {
@@ -173,11 +319,43 @@ export async function getMacroData(): Promise<MacroData> {
     sources.add("FRED");
   }
 
-  const rate = await fetchEcbPolicyRate();
-  sources.add(rate.label.includes("ECB") ? "ECB" : "FRED");
+  const [policyRateResult, marketsTodayResults, macroContextResults] = await Promise.all(
+    [
+    fetchEcbPolicyRate(),
+    Promise.allSettled([
+      fetchVix(),
+      fetchUs10yYield(),
+      fetchEurUsd(),
+      fetchOil(),
+      fetchGold(),
+    ]),
+    Promise.allSettled([fetchPmi(), fetchYieldCurve()]),
+  ],
+  );
+
+  const marketsToday = fulfilledValues(marketsTodayResults);
+  if (marketsToday.length === 0) {
+    throw new Error("Failed to fetch market indicators");
+  }
+
+  sources.add("FRED");
+
+  const macroEnvironment = [
+    inflation,
+    policyRateResult,
+    ...fulfilledValues(macroContextResults),
+  ];
+
+  if (hasAnyFailure(marketsTodayResults) || hasAnyFailure(macroContextResults)) {
+    sources.add("FRED");
+  }
+
+  sources.add(policyRateResult.label.includes("ECB") ? "ECB" : "FRED");
 
   return {
-    indicators: [inflation, rate],
+    marketsToday,
+    macroEnvironment,
+    indicators: [...marketsToday, ...macroEnvironment],
     updatedAt: new Date().toISOString(),
     sources: Array.from(sources),
   };

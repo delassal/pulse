@@ -19,6 +19,7 @@ export interface EtfData {
 }
 
 export interface MacroIndicator {
+  id: string;
   label: string;
   value: number;
   change?: number;
@@ -26,6 +27,8 @@ export interface MacroIndicator {
 }
 
 export interface MacroData {
+  marketsToday: MacroIndicator[];
+  macroEnvironment: MacroIndicator[];
   indicators: MacroIndicator[];
   updatedAt: string;
   sources: string[];

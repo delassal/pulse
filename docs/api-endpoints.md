@@ -18,10 +18,12 @@ Response:
 
 ## GET /api/macro
 
-Purpose: Returns normalized macro indicators. ECB is preferred, with FRED fallback.
+Purpose: Returns grouped market + macro indicators for a concise morning briefing. ECB is preferred for inflation/policy rate, with FRED fallback.
 
 Response:
-- indicators: { label: string; value: number; change?: number; unit: string }[]
+- marketsToday: { id: string; label: string; value: number; change?: number; unit: string }[]
+- macroEnvironment: { id: string; label: string; value: number; change?: number; unit: string }[]
+- indicators: flat list of all indicators (backward-compatibility)
 - sources: string[]
 - updatedAt: string (ISO timestamp)
 
