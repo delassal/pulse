@@ -18,11 +18,16 @@ Response:
 
 ## GET /api/macro
 
-Purpose: Returns grouped market + macro indicators for a concise morning briefing. ECB is preferred for inflation/policy rate, with FRED fallback.
+Purpose: Returns grouped market + macro indicators for a concise morning briefing. Regional charts pair inflation with a deposit-facility style rate (direct series where available, closest policy-rate proxy otherwise).
+
+Current indicator set:
+- Markets Today: VIX, EUR/USD, Oil (WTI), Gold
+- Macro Environment: Inflation + Deposit Facility by region (EU, UK, US, Russia, China), plus PMI
 
 Response:
-- marketsToday: { id: string; label: string; value: number; change?: number; unit: string }[]
-- macroEnvironment: { id: string; label: string; value: number; change?: number; unit: string }[]
+- marketsToday: { id: string; label: string; value: number; change?: number; unit: string; history?: { date: string; value: number }[] }[]
+- regions: { id: "eu" | "uk" | "us" | "russia" | "china"; label: string; inflation: Indicator; policyRate: Indicator; history: { date: string; inflation: number; policyRate: number }[] }[]
+- macroEnvironment: flat indicator list used for compatibility and extensions
 - indicators: flat list of all indicators (backward-compatibility)
 - sources: string[]
 - updatedAt: string (ISO timestamp)

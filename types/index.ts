@@ -24,11 +24,27 @@ export interface MacroIndicator {
   value: number;
   change?: number;
   unit: string;
+  history?: { date: string; value: number }[];
+}
+
+export interface MacroRegionContextPoint {
+  date: string;
+  inflation: number;
+  policyRate: number;
+}
+
+export interface MacroRegionContext {
+  id: "eu" | "uk" | "us" | "russia" | "china";
+  label: string;
+  inflation: MacroIndicator;
+  policyRate: MacroIndicator;
+  history: MacroRegionContextPoint[];
 }
 
 export interface MacroData {
   marketsToday: MacroIndicator[];
   macroEnvironment: MacroIndicator[];
+  regions: MacroRegionContext[];
   indicators: MacroIndicator[];
   updatedAt: string;
   sources: string[];

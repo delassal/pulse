@@ -90,3 +90,29 @@ export function GymIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function UkOutlineIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M12.3 5.2 10.9 6l.2 1.5-1.1.7.2 1.8-.9 1 .3 1.9-.7 1.2.4 1.6 1.3.9 1.4-.6.9-1.3-.2-1.6.8-1.2-.1-1.5.8-1.4-.5-1.8-1-1.2Z" />
+      <path d="m13.7 15.8 1.1.9-.2 1.1-1 .4-.9-.8.2-.9z" />
+    </svg>
+  );
+}
+
+export function RussiaOutlineIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M4.2 10.2 6 8.4h3.2l1.7-.8 2.6.7h2.9l1.8 1.4 1.7-.1 1.3 1.4-.5 1.5-2.1.6-1.7 1.2-2.6-.1-1.9 1-2.8-.3-1.4 1.1-2.3-.2-1.4-1.5.5-1.6-1.1-1.5z" />
+    </svg>
+  );
+}
+
+export function ChinaOutlineIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M6.4 7.4 8.8 6l2 .9 1.7-.4 1.4 1 2-.2 1.6 1.5-.1 1.8 1 1-.5 1.9-1.8.9-.6 1.6-1.8.6-1 1.1-2-.4-1.3-1.4-1.8-.6-1.1-1.7-.9-.1-.6-1.7.6-1.7 1.3-1.4z" />
+      <path d="M15.5 15.8 16.6 17l-.4 1.1-1.1.2-.8-.8.2-1z" />
+    </svg>
+  );
+}
