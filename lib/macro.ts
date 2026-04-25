@@ -9,17 +9,18 @@ const FRED_GOLD_URL =
 const FRED_PMI_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=NAPM";
 const FRED_FEDFUNDS_URL =
   "https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS";
+const BLS_US_CPI_URL = "https://api.bls.gov/publicAPI/v2/timeseries/data/";
 
 const FRED_INFLATION_EU_URL =
   "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP0000EZ19M086NEST";
 const FRED_INFLATION_UK_URL =
-  "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPALTT01GBM657N";
+  "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GBRCPIALLMINMEI";
 const FRED_INFLATION_US_URL =
-  "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPALTT01USM657N";
+  "https://fred.stlouisfed.org/graph/fredgraph.csv?id=USACPIALLMINMEI";
 const FRED_INFLATION_RU_URL =
   "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPALTT01RUM657N";
 const FRED_INFLATION_CN_URL =
-  "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPALTT01CNM657N";
+  "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CHNCPIALLMINMEI";
 
 const FRED_DEPOSIT_FACILITY_EU_URL =
   "https://fred.stlouisfed.org/graph/fredgraph.csv?id=ECBDFR";
@@ -30,7 +31,11 @@ const FRED_DEPOSIT_FACILITY_US_URL =
 const FRED_DEPOSIT_FACILITY_RU_PROXY_URL =
   "https://fred.stlouisfed.org/graph/fredgraph.csv?id=IRSTCI01RUM156N";
 const FRED_DEPOSIT_FACILITY_CN_PROXY_URL =
-  "https://fred.stlouisfed.org/graph/fredgraph.csv?id=IRSTCI01CNM156N";
+  "https://fred.stlouisfed.org/graph/fredgraph.csv?id=IR3TIB01CNM156N";
+const CBR_KEY_RATE_URL =
+  "https://www.cbr.ru/hd_base/KeyRate/?UniDbQuery.Posted=True";
+const CBR_INFLATION_URL =
+  "https://www.cbr.ru/hd_base/infl/?UniDbQuery.Posted=True";
 
 const FETCH_START_DATE = "2019-01-01";
 const DISPLAY_START_DATE = "2020-01-01";
@@ -104,6 +109,31 @@ function getSeriesKey(url: string) {
   }
 
   return seriesId;
+}
+
+function toCbrDate(isoDate: string) {
+  const [year, month, day] = isoDate.split("-");
+  return `${day}.${month}.${year}`;
+}
+
+function parseCbrDate(value: string) {
+  const [day, month, year] = value.split(".");
+
+  if (!day || !month || !year) {
+    return null;
+  }
+
+  return `${year}-${month}-${day}`;
+}
+
+function parseCbrMonthYear(value: string) {
+  const [month, year] = value.split(".");
+
+  if (!month || !year) {
+    return null;
+  }
+
+  return `${year}-${month}-01`;
 }
 
 async function fetchCsvSeries(url: string): Promise<SeriesPoint[]> {
@@ -251,25 +281,47 @@ function mergeRegionHistory(
 }
 
 async function fetchRegionalInflation(config: RegionSeriesConfig): Promise<MacroIndicator> {
+  if (config.id === "us") {
+    try {
+      return await fetchUsInflation();
+    } catch {
+      const fallbackPoints = await fetchCsvSeries(config.inflationUrl);
+
+      return buildIndicator(
+        `inflation_${config.id}`,
+        "Inflation (FRED proxy)",
+        "%",
+        toYoySeries(fallbackPoints),
+        MACRO_HISTORY_POINTS,
+      );
+    }
+  }
+
+  if (config.id === "russia") {
+    try {
+      return await fetchRussiaInflationProxy();
+    } catch {
+      const fallbackPoints = await fetchCsvSeries(config.inflationUrl);
+
+      return buildIndicator(
+        `inflation_${config.id}`,
+        "Inflation (FRED proxy)",
+        "%",
+        fallbackPoints,
+        MACRO_HISTORY_POINTS,
+      );
+    }
+  }
+
   const points = await fetchCsvSeries(config.inflationUrl);
 
-  if (config.id === "eu") {
-    const yoySeries = toYoySeries(points);
-
-    return buildIndicator(
-      `inflation_${config.id}`,
-      "Inflation",
-      "%",
-      yoySeries,
-      MACRO_HISTORY_POINTS,
-    );
-  }
+  const yoySeries = toYoySeries(points);
 
   return buildIndicator(
     `inflation_${config.id}`,
     "Inflation",
     "%",
-    points,
+    yoySeries,
     MACRO_HISTORY_POINTS,
   );
 }
@@ -277,6 +329,22 @@ async function fetchRegionalInflation(config: RegionSeriesConfig): Promise<Macro
 async function fetchRegionalPolicyRate(config: RegionSeriesConfig): Promise<MacroIndicator> {
   if (config.id === "us") {
     return fetchUsDepositFacility();
+  }
+
+  if (config.id === "russia") {
+    try {
+      return await fetchRussiaDepositFacilityProxy();
+    } catch {
+      const fallbackPoints = await fetchCsvSeries(config.depositFacilityUrl);
+
+      return buildIndicator(
+        `policy_rate_${config.id}`,
+        "Deposit Facility (FRED proxy)",
+        "%",
+        fallbackPoints,
+        MACRO_HISTORY_POINTS,
+      );
+    }
   }
 
   const points = await fetchCsvSeries(config.depositFacilityUrl);
@@ -314,6 +382,199 @@ async function fetchUsDepositFacility(): Promise<MacroIndicator> {
     "Deposit Facility",
     "%",
     combinedPoints,
+    MACRO_HISTORY_POINTS,
+  );
+}
+
+async function fetchUsInflation(): Promise<MacroIndicator> {
+  const currentYear = String(new Date().getUTCFullYear());
+  const response = await fetch(BLS_US_CPI_URL, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      seriesid: ["CUSR0000SA0"],
+      startyear: FETCH_START_DATE.slice(0, 4),
+      endyear: currentYear,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch BLS CPI series");
+  }
+
+  const payload = (await response.json()) as {
+    status?: string;
+    Results?: {
+      series?: Array<{
+        data?: Array<{ year?: string; period?: string; value?: string }>;
+      }>;
+    };
+  };
+
+  if (payload.status !== "REQUEST_SUCCEEDED") {
+    throw new Error("BLS CPI request did not succeed");
+  }
+
+  const data = payload.Results?.series?.[0]?.data ?? [];
+
+  const points = data
+    .map((entry) => {
+      const year = entry.year;
+      const period = entry.period;
+      const value = toNumber(entry.value);
+
+      if (!year || !period || value === null || !period.startsWith("M") || period === "M13") {
+        return null;
+      }
+
+      const month = period.slice(1).padStart(2, "0");
+      const date = `${year}-${month}-01`;
+
+      if (date < FETCH_START_DATE) {
+        return null;
+      }
+
+      return { date, value };
+    })
+    .filter((point): point is SeriesPoint => point !== null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const yoySeries = toYoySeries(points);
+
+  return buildIndicator(
+    "inflation_us",
+    "Inflation (BLS CPI)",
+    "%",
+    yoySeries,
+    MACRO_HISTORY_POINTS,
+  );
+}
+
+async function fetchRussiaDepositFacilityProxy(): Promise<MacroIndicator> {
+  const from = toCbrDate(FETCH_START_DATE);
+  const to = toCbrDate(new Date().toISOString().slice(0, 10));
+  const url = `${CBR_KEY_RATE_URL}&UniDbQuery.From=${from}&UniDbQuery.To=${to}`;
+  const response = await fetch(url, { cache: "no-store" });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch CBR key rate series");
+  }
+
+  const html = await response.text();
+  const rowRegex = /<td>(\d{2}\.\d{2}\.\d{4})<\/td>\s*<td>([\d,]+)<\/td>/g;
+  const points: SeriesPoint[] = [];
+  let match = rowRegex.exec(html);
+
+  while (match) {
+    const isoDate = parseCbrDate(match[1]);
+    const value = toNumber(match[2].replace(",", "."));
+
+    if (isoDate && value !== null && isoDate >= FETCH_START_DATE) {
+      points.push({ date: isoDate, value });
+    }
+
+    match = rowRegex.exec(html);
+  }
+
+  const sortedPoints = points.sort((a, b) => a.date.localeCompare(b.date));
+
+  if (sortedPoints.length < 2) {
+    throw new Error("Insufficient CBR key rate points");
+  }
+
+  return buildIndicator(
+    "policy_rate_russia",
+    "Deposit Facility (CBR proxy)",
+    "%",
+    sortedPoints,
+    MACRO_HISTORY_POINTS,
+  );
+}
+
+async function fetchRussiaInflationProxy(): Promise<MacroIndicator> {
+  const from = toCbrDate(FETCH_START_DATE);
+  const to = toCbrDate(new Date().toISOString().slice(0, 10));
+  const url = `${CBR_INFLATION_URL}&UniDbQuery.From=${encodeURIComponent(from)}&UniDbQuery.To=${encodeURIComponent(to)}`;
+  const response = await fetch(url, { cache: "no-store" });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch CBR inflation series");
+  }
+
+  const html = await response.text();
+  const inflationSeriesIndex = html.indexOf('"name":"Инфляция, % г/г"');
+
+  if (inflationSeriesIndex < 0) {
+    throw new Error("Missing CBR inflation series");
+  }
+
+  const xAxisStart = html.lastIndexOf('"xAxis":{"type":"category"', inflationSeriesIndex);
+  if (xAxisStart < 0) {
+    throw new Error("Missing CBR inflation categories");
+  }
+
+  const xAxisEnd = html.indexOf(',"yAxis"', xAxisStart);
+  if (xAxisEnd < 0) {
+    throw new Error("Missing CBR inflation category end");
+  }
+
+  const categoriesSlice = html.slice(xAxisStart, xAxisEnd);
+  const monthMatches = categoriesSlice.match(/"\d{2}\.\d{4}"/g) ?? [];
+  const months = monthMatches
+    .map((match) => match.replace(/"/g, ""))
+    .map((monthYear) => parseCbrMonthYear(monthYear))
+    .filter((value): value is string => value !== null);
+
+  const dataToken = '"data":[';
+  const dataStart = html.lastIndexOf(dataToken, inflationSeriesIndex);
+  if (dataStart < 0) {
+    throw new Error("Missing CBR inflation data");
+  }
+
+  const dataValuesStart = dataStart + dataToken.length;
+  const dataEnd = html.indexOf('],"color"', dataValuesStart);
+  if (dataEnd < 0) {
+    throw new Error("Missing CBR inflation data end");
+  }
+
+  const dataRaw = html.slice(dataValuesStart, dataEnd);
+  const values = dataRaw.split(",").map((value) => {
+    const trimmed = value.trim();
+
+    if (trimmed === "null" || trimmed === "") {
+      return null;
+    }
+
+    return toNumber(trimmed);
+  });
+
+  const monthlyValues = new Map<string, number>();
+  for (let index = 0; index < Math.min(months.length, values.length); index += 1) {
+    const month = months[index];
+    const value = values[index];
+
+    if (value !== null) {
+      monthlyValues.set(month, value);
+    }
+  }
+
+  const points = Array.from(monthlyValues.entries())
+    .map(([date, value]) => ({ date, value }))
+    .filter((point) => point.date >= FETCH_START_DATE)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (points.length < 2) {
+    throw new Error("Insufficient CBR inflation points");
+  }
+
+  return buildIndicator(
+    "inflation_russia",
+    "Inflation (CBR proxy)",
+    "%",
+    points,
     MACRO_HISTORY_POINTS,
   );
 }
@@ -399,12 +660,34 @@ export async function getMacroData(): Promise<MacroData> {
     || hasAnyFailure(regionResults)
     || hasAnyFailure(macroContextResults);
 
+  const sources = new Set<string>(["FRED"]);
+  const usesBls = regions.some((region) =>
+    region.inflation.label.includes("BLS"),
+  );
+  const usesCbr = regions.some(
+    (region) =>
+      region.policyRate.label.includes("CBR")
+      || region.inflation.label.includes("CBR"),
+  );
+
+  if (usesBls) {
+    sources.add("BLS");
+  }
+
+  if (usesCbr) {
+    sources.add("CBR");
+  }
+
+  if (hadFailures) {
+    sources.add("partial");
+  }
+
   return {
     marketsToday,
     regions,
     macroEnvironment,
     indicators: [...marketsToday, ...macroEnvironment],
     updatedAt: new Date().toISOString(),
-    sources: hadFailures ? ["FRED (partial)"] : ["FRED"],
+    sources: Array.from(sources),
   };
 }

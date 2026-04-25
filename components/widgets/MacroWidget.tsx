@@ -128,6 +128,54 @@ function formatTooltipDate(value: string) {
   }).format(new Date(`${value}T00:00:00`));
 }
 
+function latestHistoryDate(history?: { date: string; value: number }[]) {
+  if (!history?.length) {
+    return null;
+  }
+
+  return history[history.length - 1].date;
+}
+
+function formatDataVintage(dateIso: string) {
+  return new Intl.DateTimeFormat("de-DE", {
+    year: "numeric",
+    month: "short",
+  }).format(new Date(`${dateIso}T00:00:00`));
+}
+
+function getFreshness(latestDate: string | null) {
+  if (!latestDate) {
+    return {
+      text: "no recent datapoint",
+      className: "text-[color:var(--danger)]",
+    };
+  }
+
+  const now = new Date();
+  const latest = new Date(`${latestDate}T00:00:00`);
+  const diffMs = now.getTime() - latest.getTime();
+  const ageDays = Math.max(0, Math.floor(diffMs / (24 * 60 * 60 * 1000)));
+
+  if (ageDays <= 60) {
+    return {
+      text: `updated ${formatDataVintage(latestDate)}`,
+      className: "text-[color:var(--success)]",
+    };
+  }
+
+  if (ageDays <= 180) {
+    return {
+      text: `older data (${formatDataVintage(latestDate)})`,
+      className: "text-[color:var(--warning)]",
+    };
+  }
+
+  return {
+    text: `stale data (${formatDataVintage(latestDate)})`,
+    className: "text-[color:var(--danger)]",
+  };
+}
+
 function renderRegionTooltip() {
   return function RegionTooltip({ active, payload, label }: TooltipContentProps<number, string>) {
     if (!active || !payload?.length || typeof label !== "string") {
@@ -165,7 +213,7 @@ function RegionMacroChart({
     .map((point) => point.date);
 
   return (
-    <div className="mt-2 h-32 w-full min-w-0">
+    <div className="mt-2 h-40 w-full min-w-0">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={points} margin={{ top: 4, right: 4, bottom: 14, left: 6 }}>
           <XAxis
@@ -173,6 +221,7 @@ function RegionMacroChart({
             ticks={yearTicks}
             tickFormatter={formatMonthTick}
             minTickGap={24}
+            interval="preserveStartEnd"
             tick={{ fill: "var(--muted)", fontSize: 10 }}
           />
           <YAxis
@@ -289,6 +338,10 @@ export function MacroWidget() {
             {data.regions.map((region) => {
               const inflationYoyChange = getYearOverYearChange(region.history, "inflation");
               const rateYoyChange = getYearOverYearChange(region.history, "policyRate");
+              const inflationLatest = latestHistoryDate(region.inflation.history);
+              const rateLatest = latestHistoryDate(region.policyRate.history);
+              const inflationFreshness = getFreshness(inflationLatest);
+              const rateFreshness = getFreshness(rateLatest);
               const inflationChange = inflationYoyChange ?? region.inflation.change ?? 0;
               const rateChange = rateYoyChange ?? region.policyRate.change ?? 0;
               const inflationBasis: ChangeBasis = inflationYoyChange !== null ? "year" : "previous";
@@ -327,6 +380,9 @@ export function MacroWidget() {
                       <p className={`text-xs ${inflationColor}`}>
                         {formatChange(inflationChange, region.inflation.unit, inflationBasis)}
                       </p>
+                      <p className={`text-[11px] ${inflationFreshness.className}`}>
+                        {inflationFreshness.text}
+                      </p>
                     </div>
                     <div>
                       <p className="theme-muted text-[11px]">Deposit Facility</p>
@@ -335,6 +391,9 @@ export function MacroWidget() {
                       </p>
                       <p className={`text-xs ${rateColor}`}>
                         {formatChange(rateChange, region.policyRate.unit, rateBasis)}
+                      </p>
+                      <p className={`text-[11px] ${rateFreshness.className}`}>
+                        {rateFreshness.text}
                       </p>
                     </div>
                   </div>
