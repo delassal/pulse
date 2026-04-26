@@ -177,7 +177,7 @@ function getFreshness(latestDate: string | null) {
 }
 
 function renderRegionTooltip() {
-  return function RegionTooltip({ active, payload, label }: TooltipContentProps<number, string>) {
+  return function RegionTooltip({ active, payload, label }: TooltipContentProps) {
     if (!active || !payload?.length || typeof label !== "string") {
       return null;
     }
