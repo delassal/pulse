@@ -37,8 +37,8 @@ export const ETF_CONFIGS: EtfConfig[] = [
   },
 ];
 
-function getYahooChartUrl(symbol: string) {
-  return `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1y&includePrePost=false&events=div%2Csplits`;
+function getYahooChartUrl(symbol: string, range: "1y" | "max") {
+  return `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=${range}&includePrePost=false&events=div%2Csplits`;
 }
 
 function startOfYearIso(date = new Date()): string {
@@ -68,19 +68,24 @@ function getEtfConfig(identifier: string): EtfConfig {
 
 export async function getEtfData(identifier: string): Promise<EtfData> {
   const config = getEtfConfig(identifier);
-  const response = await fetch(getYahooChartUrl(config.symbol), {
-    cache: "no-store",
-    headers: {
-      "user-agent": "Mozilla/5.0",
-      accept: "application/json",
-    },
-  });
+  const headers = {
+    "user-agent": "Mozilla/5.0",
+    accept: "application/json",
+  };
 
-  if (!response.ok) {
+  const [fullResponse, ytdResponse] = await Promise.all([
+    fetch(getYahooChartUrl(config.symbol, "max"), { cache: "no-store", headers }),
+    fetch(getYahooChartUrl(config.symbol, "1y"), { cache: "no-store", headers }),
+  ]);
+
+  if (!fullResponse.ok || !ytdResponse.ok) {
     throw new Error("Unable to fetch ETF data");
   }
 
-  const payload = (await response.json()) as {
+  const [fullPayload, ytdPayload] = (await Promise.all([
+    fullResponse.json(),
+    ytdResponse.json(),
+  ])) as Array<{
     chart?: {
       result?: Array<{
         meta?: {
@@ -100,39 +105,45 @@ export async function getEtfData(identifier: string): Promise<EtfData> {
         };
       }>;
     };
+  }>;
+
+  const toHistoryRows = (payload: typeof fullPayload) => {
+    const result = payload.chart?.result?.[0];
+    const timestamps = result?.timestamp ?? [];
+    const closes = result?.indicators?.quote?.[0]?.close ?? [];
+
+    const historyRows = timestamps
+      .map((timestamp, index) => {
+        const close = toNumber(closes[index]);
+        if (close === null) {
+          return null;
+        }
+
+        return {
+          date: new Date(timestamp * 1000).toISOString().slice(0, 10),
+          close,
+        };
+      })
+      .filter((point): point is { date: string; close: number } => point !== null);
+
+    return { historyRows, meta: result?.meta };
   };
 
-  const result = payload.chart?.result?.[0];
-  const timestamps = result?.timestamp ?? [];
-  const closes = result?.indicators?.quote?.[0]?.close ?? [];
-  const asOf = formatAsOf(result?.meta?.regularMarketTime);
-  const yearStart = startOfYearIso();
+  const { historyRows: fullHistoryRows, meta: fullMeta } = toHistoryRows(fullPayload);
+  const { historyRows: ytdHistoryRows, meta: ytdMeta } = toHistoryRows(ytdPayload);
+  const meta = fullMeta ?? ytdMeta;
 
-  const historyRows = timestamps
-    .map((timestamp, index) => {
-      const close = toNumber(closes[index]);
-      if (close === null) {
-        return null;
-      }
-
-      return {
-        date: new Date(timestamp * 1000).toISOString().slice(0, 10),
-        close,
-      };
-    })
-    .filter((point): point is { date: string; close: number } => point !== null);
-
-  const meta = result?.meta;
-
-  if (historyRows.length < 2 || !meta) {
+  if (fullHistoryRows.length < 2 || !meta) {
     throw new Error(`Insufficient ETF history for ${config.symbol}`);
   }
 
-  const ytdHistory = historyRows.filter((point) => point.date >= yearStart);
-  const chartHistory = ytdHistory.length >= 2 ? ytdHistory : historyRows;
+  const asOf = formatAsOf(meta.regularMarketTime);
+  const yearStart = startOfYearIso();
+  const ytdHistory = ytdHistoryRows.filter((point) => point.date >= yearStart);
+  const chartHistory = ytdHistory.length >= 2 ? ytdHistory : fullHistoryRows;
   const firstYtdPoint = chartHistory[0];
-  const latest = historyRows[historyRows.length - 1];
-  const previous = historyRows[historyRows.length - 2];
+  const latest = fullHistoryRows[fullHistoryRows.length - 1];
+  const previous = fullHistoryRows[fullHistoryRows.length - 2];
   const dailyChangePct = calcPctChange(latest.close, previous.close);
   const ytdChangePct = calcPctChange(latest.close, firstYtdPoint.close);
 
@@ -148,6 +159,10 @@ export async function getEtfData(identifier: string): Promise<EtfData> {
     ytdChangePct,
     trend,
     history: chartHistory.map((point) => ({
+      date: point.date,
+      price: point.close,
+    })),
+    fullHistory: fullHistoryRows.map((point) => ({
       date: point.date,
       price: point.close,
     })),

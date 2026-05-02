@@ -14,6 +14,7 @@ export interface EtfData {
   ytdChangePct: number;
   trend: TrendDirection;
   history: EtfPoint[];
+  fullHistory: EtfPoint[];
   asOf: string;
   updatedAt: string;
 }

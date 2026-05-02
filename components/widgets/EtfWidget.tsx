@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/Icons";
 import type { ApiError, EtfData } from "@/types";
 import type { EtfConfig } from "@/lib/etf";
+import { calcPctChange } from "@/lib/utils";
 
 function formatCurrency(value: number, currency: string) {
   return new Intl.NumberFormat("en-DE", {
@@ -113,11 +114,39 @@ function isWithinTradingHours(symbol: string, now = new Date()) {
   return totalMinutes >= 9 * 60 + 30 && totalMinutes < 16 * 60;
 }
 
+function getYearTicks(history: EtfData["history"]) {
+  if (history.length === 0) {
+    return [];
+  }
+
+  const years = history.map((point) => Number(point.date.slice(0, 4)));
+  const minYear = Math.min(...years);
+  const maxYear = Math.max(...years);
+
+  const ticks: string[] = [];
+  for (let year = minYear; year <= maxYear; year += 1) {
+    const firstInYear = history.find((point) => Number(point.date.slice(0, 4)) === year);
+    if (firstInYear) {
+      ticks.push(firstInYear.date);
+    }
+  }
+
+  return ticks;
+}
+
 function getMonthTicks(history: EtfData["history"]) {
-  return history.filter((point, index) => {
-    const previousMonth = history[index - 1]?.date.slice(0, 7);
-    return index === 0 || point.date.slice(0, 7) !== previousMonth;
-  }).map((point) => point.date);
+  return history
+    .filter((point, index) => {
+      const previousMonth = history[index - 1]?.date.slice(0, 7);
+      return index === 0 || point.date.slice(0, 7) !== previousMonth;
+    })
+    .map((point) => point.date);
+}
+
+function formatYearTick(value: string) {
+  return new Intl.DateTimeFormat("en-US", { year: "numeric" }).format(
+    new Date(`${value}T00:00:00`),
+  );
 }
 
 function renderTooltip(currency: string) {
@@ -165,6 +194,7 @@ interface EtfWidgetProps {
 export function EtfWidget({ etf }: EtfWidgetProps) {
   const [chartContainerElement, setChartContainerElement] = useState<HTMLDivElement | null>(null);
   const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
+  const [selectedRange, setSelectedRange] = useState<"ytd" | "5y" | "max">("ytd");
 
   useEffect(() => {
     if (!chartContainerElement) {
@@ -230,34 +260,83 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
     );
   }
 
+  // Get history based on selected range
+  const getHistoryForRange = (range: "ytd" | "5y" | "max"): EtfData["history"] => {
+    if (range === "ytd") {
+      return data.history;
+    }
+
+    const now = new Date();
+    let startDate: string;
+
+    if (range === "5y") {
+      const fiveYearsAgo = new Date(now.getFullYear() - 5, now.getMonth(), now.getDate());
+      startDate = fiveYearsAgo.toISOString().slice(0, 10);
+    } else {
+      // "max" - return all history
+      return data.fullHistory;
+    }
+
+    return data.fullHistory.filter((point) => point.date >= startDate);
+  };
+
+  // Calculate period change
+  const calculatePeriodChange = (history: EtfData["history"]): number => {
+    if (history.length < 2) return 0;
+    const first = history[0].price;
+    const last = history[history.length - 1].price;
+    return calcPctChange(last, first);
+  };
+
+  const chartHistory = getHistoryForRange(selectedRange);
+  const periodChangePct = calculatePeriodChange(chartHistory);
+  const periodChangeColor =
+    periodChangePct > 0
+      ? "text-[color:var(--success)]"
+      : periodChangePct < 0
+        ? "text-[color:var(--danger)]"
+        : "theme-muted";
+
   const changeColor =
     data.trend === "up"
       ? "text-[color:var(--success)]"
       : data.trend === "down"
         ? "text-[color:var(--danger)]"
         : "theme-muted";
-  const ytdColor =
-    data.ytdChangePct > 0
-      ? "text-[color:var(--success)]"
-      : data.ytdChangePct < 0
-        ? "text-[color:var(--danger)]"
-        : "theme-muted";
-  const monthTicks = getMonthTicks(data.history);
-  const showDailyChange = isWithinTradingHours(data.symbol);
-  const chartColor = showDailyChange
-    ? data.trend === "down"
-      ? "var(--danger)"
-      : data.trend === "up"
-        ? "var(--success)"
-        : "var(--subtle)"
-    : "var(--subtle)";
-    const firstHistoryPrice = data.history[0]?.price;
+    const ticks = selectedRange === "ytd" ? getMonthTicks(chartHistory) : getYearTicks(chartHistory);
+    const tickFormatter = selectedRange === "ytd" ? formatMonthTick : formatYearTick;
+    const lineType: "linear" | "monotone" = "monotone";
+  const showDailyChange = selectedRange === "ytd" && isWithinTradingHours(data.symbol);
+  const chartColor =
+    periodChangePct > 0
+      ? "var(--success)"
+      : periodChangePct < 0
+        ? "var(--danger)"
+        : "var(--subtle)";
+  const firstHistoryPrice = chartHistory[0]?.price;
   const referenceLineColor = "var(--muted)";
 
   return (
     <Card title={etf.displayName} subtitle={data.name} icon={getRegionIcon(etf.region)}>
       <div className="space-y-3">
-        <p className="theme-muted text-xs">As of {formatAsOf(data.asOf)}</p>
+        <div>
+          <p className="theme-muted text-xs">As of {formatAsOf(data.asOf)}</p>
+          <div className="mt-2 flex gap-2">
+            {(["max", "5y", "ytd"] as const).map((range) => (
+              <button
+                key={range}
+                onClick={() => setSelectedRange(range)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  selectedRange === range
+                    ? "bg-[color:var(--primary)] border border-[color:var(--primary)] shadow-sm theme-text"
+                    : "theme-text border border-[color:var(--grid)] hover:bg-[color:var(--surface-hover)]"
+                }`}
+              >
+                {range === "ytd" ? "YTD" : range === "5y" ? "5Y" : "Max"}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
           <div className="min-w-0">
@@ -271,12 +350,12 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
             ) : null}
           </div>
 
-          <div className={`text-right ${ytdColor}`}>
+          <div className={`text-right ${periodChangeColor}`}>
             <p className="theme-muted text-[11px] font-semibold uppercase tracking-[0.18em]">
-              YTD
+              {selectedRange === "ytd" ? "YTD" : selectedRange === "5y" ? "5Y" : "Max"}
             </p>
             <p className="text-2xl font-semibold leading-none">
-              {formatPct(data.ytdChangePct)}
+              {formatPct(periodChangePct)}
             </p>
           </div>
         </div>
@@ -286,7 +365,7 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
             <ComposedChart
               width={chartSize.width}
               height={chartSize.height}
-              data={data.history}
+              data={chartHistory}
               margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
             >
               <defs>
@@ -323,8 +402,8 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
                 />
               <XAxis
                 dataKey="date"
-                ticks={monthTicks}
-                tickFormatter={formatMonthTick}
+                ticks={ticks}
+                tickFormatter={tickFormatter}
                 tick={{ fontSize: 10, fill: "var(--muted)" }}
                 axisLine={false}
                 tickLine={false}
@@ -342,7 +421,7 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
                 fill={`url(#etf-fill-${etf.isin})`}
               />
               <Line
-                type="monotone"
+                type={lineType}
                 dataKey="price"
                 stroke={chartColor}
                 strokeWidth={2.8}

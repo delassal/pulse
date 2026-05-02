@@ -35,11 +35,20 @@ export default function DashboardPage() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-6 sm:px-6 sm:py-8">
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="theme-text mt-1 text-3xl font-semibold sm:text-4xl">
-            Pulse
-          </h1>
-          <p className="theme-subtle mt-2 text-sm">
+        <div className="flex flex-col items-start">
+          <div className="brand-logo" aria-hidden="true">
+            <img
+              src="/logo-light.svg"
+              alt=""
+              className="brand-logo-image brand-logo-light"
+            />
+            <img
+              src="/logo-dark.svg"
+              alt=""
+              className="brand-logo-image brand-logo-dark"
+            />
+          </div>
+          <p className="theme-subtle mt-5 text-sm">
             Daniel&apos;s quick snapshot of important signals.
           </p>
         </div>
