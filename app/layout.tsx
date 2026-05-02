@@ -10,7 +10,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Pulse Dashboard",
+  title: "pulse.",
   description: "Morning briefing with personal and financial metrics",
 };
 
