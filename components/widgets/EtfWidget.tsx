@@ -307,12 +307,14 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
     const tickFormatter = selectedRange === "ytd" ? formatMonthTick : formatYearTick;
     const lineType: "linear" | "monotone" = "monotone";
   const showDailyChange = selectedRange === "ytd" && isWithinTradingHours(data.symbol);
-  const chartColor =
-    periodChangePct > 0
+  const inTradingHours = isWithinTradingHours(data.symbol);
+  const chartColor = inTradingHours
+    ? periodChangePct > 0
       ? "var(--success)"
       : periodChangePct < 0
         ? "var(--danger)"
-        : "var(--subtle)";
+        : "var(--subtle)"
+    : "var(--muted)";
   const firstHistoryPrice = chartHistory[0]?.price;
   const referenceLineColor = "var(--muted)";
 
