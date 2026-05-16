@@ -12,6 +12,9 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   title: "pulse.",
   description: "Morning briefing with personal and financial metrics",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
 
 export default function RootLayout({
