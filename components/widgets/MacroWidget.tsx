@@ -1,10 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -204,6 +204,41 @@ function RegionMacroChart({
 }: {
   points: { date: string; inflation: number; policyRate: number }[];
 }) {
+  const [chartContainerElement, setChartContainerElement] = useState<HTMLDivElement | null>(null);
+  const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (!chartContainerElement) {
+      return;
+    }
+
+    const updateSize = () => {
+      const { width, height } = chartContainerElement.getBoundingClientRect();
+      const nextWidth = Math.max(0, Math.floor(width));
+      const nextHeight = Math.max(0, Math.floor(height));
+
+      setChartSize((previous) => {
+        if (previous.width === nextWidth && previous.height === nextHeight) {
+          return previous;
+        }
+
+        return { width: nextWidth, height: nextHeight };
+      });
+    };
+
+    updateSize();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateSize();
+    });
+
+    resizeObserver.observe(chartContainerElement);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [chartContainerElement]);
+
   if (points.length < 3) {
     return null;
   }
@@ -213,9 +248,14 @@ function RegionMacroChart({
     .map((point) => point.date);
 
   return (
-    <div className="mt-2 h-40 w-full min-w-0">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={points} margin={{ top: 4, right: 4, bottom: 14, left: 6 }}>
+    <div ref={setChartContainerElement} className="mt-2 h-40 w-full min-w-0">
+      {chartSize.width > 0 && chartSize.height > 0 ? (
+        <LineChart
+          width={chartSize.width}
+          height={chartSize.height}
+          data={points}
+          margin={{ top: 4, right: 4, bottom: 14, left: 6 }}
+        >
           <XAxis
             dataKey="date"
             ticks={yearTicks}
@@ -249,7 +289,7 @@ function RegionMacroChart({
             isAnimationActive={false}
           />
         </LineChart>
-      </ResponsiveContainer>
+      ) : null}
     </div>
   );
 }
