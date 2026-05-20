@@ -41,7 +41,9 @@ export default function DashboardPage() {
             Daniel&apos;s quick snapshot of important signals.
           </p>
         </div>
-        <ThemeToggle />
+        <div className="hidden sm:block">
+          <ThemeToggle />
+        </div>
       </header>
 
       <div className="space-y-8">
@@ -80,6 +82,10 @@ export default function DashboardPage() {
             <MacroWidget />
           </div>
         </section>
+      </div>
+
+      <div className="mt-8 flex justify-center sm:hidden">
+        <ThemeToggle />
       </div>
     </main>
   );
