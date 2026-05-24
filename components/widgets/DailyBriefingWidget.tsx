@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { ApiError, OnThisDayData, WeatherData } from "@/types";
+import type { ApiError, NewsData, WeatherData } from "@/types";
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -69,46 +69,51 @@ function WeatherSection() {
   );
 }
 
-function OnThisDaySection() {
-  const { data, isLoading } = useQuery<OnThisDayData, Error>({
-    queryKey: ["onthisday"],
+function NewsSection() {
+  const { data, isLoading } = useQuery<NewsData, Error>({
+    queryKey: ["news"],
     queryFn: async () => {
-      const res = await fetch("/api/onthisday");
-      const payload = (await res.json()) as OnThisDayData | ApiError;
-      if (!res.ok) throw new Error("error" in payload ? payload.error : "On-this-day failed");
-      return payload as OnThisDayData;
+      const res = await fetch("/api/news");
+      const payload = (await res.json()) as NewsData | ApiError;
+      if (!res.ok) throw new Error("error" in payload ? payload.error : "News failed");
+      return payload as NewsData;
     },
-    staleTime: 60 * 60 * 1000,
+    staleTime: 15 * 60 * 1000,
   });
 
   if (isLoading) {
     return (
       <div className="flex flex-col gap-2">
         <Skeleton className="h-4 w-20" />
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="flex gap-2">
-            <Skeleton className="h-3.5 w-10 flex-none" />
-            <Skeleton className="h-3.5 w-full" />
-          </div>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-3.5 w-full" />
         ))}
       </div>
     );
   }
 
-  if (!data?.events.length) return null;
+  if (!data?.items.length) return null;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       <p className="theme-muted text-xs font-semibold uppercase tracking-[0.16em]">
-        On this day
+        {data.source}
       </p>
       <ul className="flex flex-col gap-1.5">
-        {data.events.map((event, i) => (
-          <li key={i} className="flex gap-2 text-sm leading-snug">
-            <span className="theme-muted w-10 flex-none font-semibold tabular-nums">
-              {event.year}
-            </span>
-            <span className="theme-subtle line-clamp-2">{event.text}</span>
+        {data.items.map((item, i) => (
+          <li key={i} className="text-sm leading-snug">
+            {item.url ? (
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="theme-subtle hover:text-[color:var(--accent)] transition-colors line-clamp-1"
+              >
+                {item.title}
+              </a>
+            ) : (
+              <span className="theme-subtle line-clamp-1">{item.title}</span>
+            )}
           </li>
         ))}
       </ul>
@@ -136,9 +141,9 @@ export function DailyBriefingWidget() {
           <WeatherSection />
         </div>
 
-        {/* On this day */}
+        {/* News */}
         <div className="sm:pl-6 sm:flex-1">
-          <OnThisDaySection />
+          <NewsSection />
         </div>
       </div>
     </div>

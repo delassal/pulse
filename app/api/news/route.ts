@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { getOnThisDayData } from "@/lib/onthisday";
+import { getNewsData } from "@/lib/news";
 import type { ApiError } from "@/types";
 
 const cacheStore = new Map<string, { data: unknown; timestamp: number }>();
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours — events don't change during the day
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 function getCachedData<T>(key: string): T | null {
   const cached = cacheStore.get(key);
@@ -21,24 +21,21 @@ function setCachedData(key: string, data: unknown): void {
 
 export async function GET() {
   try {
-    const now = new Date();
-    const cacheKey = `onthisday:${now.getMonth() + 1}-${now.getDate()}`;
-
-    const cached = getCachedData(cacheKey);
+    const cached = getCachedData("news");
     if (cached) {
       return NextResponse.json(cached, {
-        headers: { "Cache-Control": "public, max-age=86400" },
+        headers: { "Cache-Control": "public, max-age=900" },
       });
     }
 
-    const data = await getOnThisDayData(now);
-    setCachedData(cacheKey, data);
+    const data = await getNewsData();
+    setCachedData("news", data);
     return NextResponse.json(data, {
-      headers: { "Cache-Control": "public, max-age=86400" },
+      headers: { "Cache-Control": "public, max-age=900" },
     });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unexpected on-this-day fetch error";
+      error instanceof Error ? error.message : "Unexpected news fetch error";
     return NextResponse.json<ApiError>({ error: message }, { status: 500 });
   }
 }
