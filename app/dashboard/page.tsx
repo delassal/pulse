@@ -6,6 +6,7 @@ import { WeatherWidget } from "@/components/widgets/WeatherWidget";
 import { DailyBriefingWidget } from "@/components/widgets/DailyBriefingWidget";
 import { FinancialsIcon, MacroIcon, PersonalIcon } from "@/components/ui/Icons";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { RefreshButton } from "@/components/ui/RefreshButton";
 import type { ReactNode } from "react";
 
 function SectionHeader({
@@ -42,7 +43,8 @@ export default function DashboardPage() {
             Daniel&apos;s quick snapshot of important signals.
           </p>
         </div>
-        <div className="hidden sm:block">
+        <div className="hidden items-center gap-2 sm:flex">
+          <RefreshButton />
           <ThemeToggle />
         </div>
       </header>
@@ -87,7 +89,8 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <div className="mt-8 flex justify-center sm:hidden">
+      <div className="mt-8 flex items-center justify-center gap-2 sm:hidden">
+        <RefreshButton />
         <ThemeToggle />
       </div>
     </main>
