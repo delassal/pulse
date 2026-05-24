@@ -1,5 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# Local Claude Code instructions (user-specific)
+CLAUDE.md
+
 .DS_Store
 
 # dependencies

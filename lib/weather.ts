@@ -53,7 +53,8 @@ export async function getWeatherData(city = DEFAULT_CITY): Promise<WeatherData> 
   const location = await geocodeCity(city);
   const weatherUrl =
     `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}` +
-    `&longitude=${location.longitude}&current=temperature_2m,weather_code&timezone=auto`;
+    `&longitude=${location.longitude}&current=temperature_2m,weather_code` +
+    `&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto`;
 
   const weatherResponse = await fetch(weatherUrl, { cache: "no-store" });
 
@@ -67,6 +68,10 @@ export async function getWeatherData(city = DEFAULT_CITY): Promise<WeatherData> 
       weather_code?: number;
       time?: string;
     };
+    daily?: {
+      temperature_2m_max?: number[];
+      temperature_2m_min?: number[];
+    };
   };
 
   const temperature = weatherData.current?.temperature_2m;
@@ -76,6 +81,9 @@ export async function getWeatherData(city = DEFAULT_CITY): Promise<WeatherData> 
     throw new Error("Incomplete weather data received");
   }
 
+  const dailyMax = weatherData.daily?.temperature_2m_max?.[0];
+  const dailyMin = weatherData.daily?.temperature_2m_min?.[0];
+
   return {
     city: location.name,
     temperature,
@@ -83,5 +91,9 @@ export async function getWeatherData(city = DEFAULT_CITY): Promise<WeatherData> 
     condition: WEATHER_CODE_MAP[weatherCode] ?? "Unknown",
     weatherCode,
     updatedAt: weatherData.current?.time ?? new Date().toISOString(),
+    forecast:
+      typeof dailyMin === "number" && typeof dailyMax === "number"
+        ? { min: Math.round(dailyMin), max: Math.round(dailyMax) }
+        : undefined,
   };
 }

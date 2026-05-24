@@ -58,6 +58,16 @@ export interface WeatherData {
   condition: string;
   weatherCode: number;
   updatedAt: string;
+  forecast?: { min: number; max: number };
+}
+
+export interface OnThisDayEvent {
+  year: number;
+  text: string;
+}
+
+export interface OnThisDayData {
+  events: OnThisDayEvent[];
 }
 
 export type GymUsageLevel = "LOW" | "MEDIUM" | "HIGH";

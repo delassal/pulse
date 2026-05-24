@@ -3,6 +3,7 @@ import { EtfWidget } from "@/components/widgets/EtfWidget";
 import { GymWidget } from "@/components/widgets/GymWidget";
 import { MacroWidget } from "@/components/widgets/MacroWidget";
 import { WeatherWidget } from "@/components/widgets/WeatherWidget";
+import { DailyBriefingWidget } from "@/components/widgets/DailyBriefingWidget";
 import { FinancialsIcon, MacroIcon, PersonalIcon } from "@/components/ui/Icons";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import type { ReactNode } from "react";
@@ -45,6 +46,8 @@ export default function DashboardPage() {
           <ThemeToggle />
         </div>
       </header>
+
+      <DailyBriefingWidget />
 
       <div className="space-y-8">
         <section>
