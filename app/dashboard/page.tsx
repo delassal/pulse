@@ -93,6 +93,20 @@ export default function DashboardPage() {
         <RefreshButton />
         <ThemeToggle />
       </div>
+
+      <footer className="mt-10 text-center">
+        <p className="theme-subtle text-xs">
+          Information according to § 5 TMG: Daniel El-Assal, Munich, Germany.
+          Contact:{" "}
+          <a
+            href="https://danielelassal.com"
+            className="hover:theme-text underline underline-offset-2"
+            target="_blank"
+          >
+            danielelassal.com
+          </a>
+        </p>
+      </footer>
     </main>
   );
 }
