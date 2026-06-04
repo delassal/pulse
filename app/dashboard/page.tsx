@@ -2,7 +2,7 @@ import { ETF_CONFIGS } from "@/lib/etf";
 import { EtfWidget } from "@/components/widgets/EtfWidget";
 import { GymWidget } from "@/components/widgets/GymWidget";
 import { MacroWidget } from "@/components/widgets/MacroWidget";
-import { WeatherWidget } from "@/components/widgets/WeatherWidget";
+import { PoolWidget } from "@/components/widgets/PoolWidget";
 import { DailyBriefingWidget } from "@/components/widgets/DailyBriefingWidget";
 import { FinancialsIcon, MacroIcon, PersonalIcon } from "@/components/ui/Icons";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
@@ -72,7 +72,7 @@ export default function DashboardPage() {
             icon={<PersonalIcon className="h-5 w-5" />}
           />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <WeatherWidget />
+            <PoolWidget />
             <GymWidget />
           </div>
         </section>

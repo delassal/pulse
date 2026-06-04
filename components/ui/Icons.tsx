@@ -193,6 +193,18 @@ export function RussiaOutlineIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function PoolIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M2 18c1.4 0 2.1-.7 3.5-.7s2.1.7 3.5.7 2.1-.7 3.5-.7 2.1.7 3.5.7 2.1-.7 3.5-.7 2.1.7 3.5.7" />
+      <path d="M2 14c1.4 0 2.1-.7 3.5-.7s2.1.7 3.5.7 2.1-.7 3.5-.7 2.1.7 3.5.7 2.1-.7 3.5-.7 2.1.7 3.5.7" />
+      <path d="M9 6l2-2 2 2 2-2 2 2" />
+      <path d="M9 10V6" />
+      <path d="M15 10V6" />
+    </svg>
+  );
+}
+
 export function ChinaOutlineIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...baseProps(props)}>

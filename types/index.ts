@@ -98,3 +98,19 @@ export interface GymUsageData {
 export interface ApiError {
   error: string;
 }
+
+export type OccupancyLevel = "LOW" | "MEDIUM" | "HIGH";
+
+export interface PoolArea {
+  id: string;
+  name: string;
+  current: number;
+  max: number;
+  percentage: number;
+  level: OccupancyLevel;
+}
+
+export interface PoolData {
+  pools: PoolArea[];
+  updatedAt: string;
+}
