@@ -7,6 +7,7 @@ import { DailyBriefingWidget } from "@/components/widgets/DailyBriefingWidget";
 import { FinancialsIcon, MacroIcon, PersonalIcon } from "@/components/ui/Icons";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { RefreshButton } from "@/components/ui/RefreshButton";
+import { LastUpdated } from "@/components/ui/LastUpdated";
 import type { ReactNode } from "react";
 
 function SectionHeader({
@@ -43,7 +44,8 @@ export default function DashboardPage() {
             Daniel&apos;s quick snapshot of important signals.
           </p>
         </div>
-        <div className="hidden items-center gap-2 sm:flex">
+        <div className="hidden items-center gap-3 sm:flex">
+          <LastUpdated />
           <RefreshButton />
           <ThemeToggle />
         </div>
@@ -89,9 +91,12 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <div className="mt-8 flex items-center justify-center gap-2 sm:hidden">
-        <RefreshButton />
-        <ThemeToggle />
+      <div className="mt-8 flex flex-col items-center gap-2 sm:hidden">
+        <div className="flex items-center gap-2">
+          <RefreshButton />
+          <ThemeToggle />
+        </div>
+        <LastUpdated />
       </div>
 
       <footer className="mt-10 text-center">

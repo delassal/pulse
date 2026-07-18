@@ -12,9 +12,9 @@ const LEVEL_COLOR: Record<OccupancyLevel, string> = {
 };
 
 const LEVEL_LABEL: Record<OccupancyLevel, string> = {
-  LOW: "Niedrig",
-  MEDIUM: "Mittel",
-  HIGH: "Hoch",
+  LOW: "Low",
+  MEDIUM: "Medium",
+  HIGH: "High",
 };
 
 export function PoolWidget() {
@@ -32,17 +32,17 @@ export function PoolWidget() {
 
   if (isLoading) {
     return (
-      <Card title="M-Bäder" subtitle="Auslastung" icon={<PoolIcon className="h-5 w-5" />}>
-        <p className="theme-muted text-sm">Lade Auslastung...</p>
+      <Card title="M-Bäder" subtitle="Occupancy" icon={<PoolIcon className="h-5 w-5" />}>
+        <p className="theme-muted text-sm">Loading occupancy...</p>
       </Card>
     );
   }
 
   if (isError || !data) {
     return (
-      <Card title="M-Bäder" subtitle="Auslastung" icon={<PoolIcon className="h-5 w-5" />}>
+      <Card title="M-Bäder" subtitle="Occupancy" icon={<PoolIcon className="h-5 w-5" />}>
         <p className="text-sm text-[color:var(--danger)]">
-          {error?.message ?? "Auslastung nicht verfügbar"}
+          {error?.message ?? "Occupancy unavailable"}
         </p>
       </Card>
     );
