@@ -54,7 +54,7 @@ export function PoolWidget() {
   });
 
   return (
-    <Card title="M-Bäder" subtitle="Aktuelle Auslastung" icon={<PoolIcon className="h-5 w-5" />}>
+    <Card title="M-Bäder" subtitle="Current occupancy" icon={<PoolIcon className="h-5 w-5" />}>
       <div className="space-y-4">
         {data.pools.map((pool) => {
           const pct = Math.round(pool.percentage);
@@ -85,9 +85,9 @@ export function PoolWidget() {
           );
         })}
         {data.pools.length === 0 && (
-          <p className="theme-muted text-sm">Keine Daten verfügbar</p>
+          <p className="theme-muted text-sm">No data available</p>
         )}
-        <p className="theme-muted text-xs">Stand {updatedAt} Uhr</p>
+        <p className="theme-muted text-xs">As of {updatedAt}</p>
       </div>
     </Card>
   );

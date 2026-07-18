@@ -28,7 +28,7 @@ const LEVEL_LABEL: Record<GymUsageLevel, string> = {
 
 function formatGymTooltipLabel(value: string) {
   const [hours, minutes] = value.split(":");
-  return `${hours}:${minutes} Uhr`;
+  return `${hours}:${minutes}`;
 }
 
 function renderGymTooltip() {
