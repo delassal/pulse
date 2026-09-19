@@ -1,19 +1,23 @@
 # Pulse
 
-Pulse is a mobile-first personal dashboard MVP that surfaces a quick morning briefing:
+Pulse is a mobile-first personal morning-briefing dashboard MVP. It surfaces a quick daily snapshot:
 
-- ETF snapshot for VWCE.DE
+- Daily briefing: greeting, Munich weather, and world news headlines
+- ETF snapshot for three positions (S&P 500, STOXX 600, EM IMI)
 - Macro & markets briefing (daily market pulse + structural macro context)
-- Weather for a configurable city (default: Munich)
-- Current gym occupancy for Fitness First club 2405764950
+- M-Bäder pool occupancy (Munich)
+- Fitness First gym occupancy (club 2405764950, München Moosach)
 
 Built with:
 
-- Next.js (App Router)
-- TypeScript
-- Tailwind CSS
-- TanStack Query
-- Recharts
+- Next.js 16.2 (App Router)
+- React 19.2
+- TypeScript (strict)
+- Tailwind CSS v4
+- TanStack Query v5
+- Recharts v3
+
+No environment variables or API keys are required — all upstream data sources are public.
 
 ## Run Locally
 
@@ -39,6 +43,8 @@ app/
 		etf/route.ts
 		gym/route.ts
 		macro/route.ts
+		news/route.ts
+		pool/route.ts
 		weather/route.ts
 	dashboard/page.tsx
 	globals.css
@@ -47,18 +53,28 @@ app/
 	providers.tsx
 
 components/
+	theme/
+		ThemeProvider.tsx
 	ui/
 		Card.tsx
+		Icons.tsx
+		LastUpdated.tsx
+		RefreshButton.tsx
+		ThemeToggle.tsx
 	widgets/
+		DailyBriefingWidget.tsx
 		EtfWidget.tsx
 		GymWidget.tsx
 		MacroWidget.tsx
+		PoolWidget.tsx
 		WeatherWidget.tsx
 
 lib/
 	etf.ts
 	gym.ts
-	macro.ts
+	macro/
+	news.ts
+	pool.ts
 	weather.ts
 	utils.ts
 
@@ -72,22 +88,26 @@ types/
 ## Architecture
 
 - `lib/`: external API calls and normalization only.
-- `app/api`: internal API routes that call `lib/` and return normalized JSON.
+- `app/api`: internal API routes that call `lib/`, apply per-route caching, and return normalized JSON.
 - `components/`: UI-only components, no external API calls.
 - `app/dashboard`: page composition layer.
 
+See [CLAUDE.md](CLAUDE.md) for the authoritative architecture, caching, and theming conventions.
+
 ## Data Sources
 
-- ETF: Stooq CSV feed (`VWCE.DE`)
-- Macro: ECB Data API (preferred), FRED CSV fallback
-- Weather: Open-Meteo geocoding + forecast APIs
-- Gym usage: Fitness First usage API (club week endpoint)
+- ETF: Yahoo Finance chart API (S&P 500 IDUS.L, STOXX 600 EXSA.DE, EM IMI EIMU.L)
+- Macro: FRED CSV (primary), BLS API for US CPI, CBR HTML scrape for Russia
+- Weather: Open-Meteo geocoding + forecast APIs (default city: Munich)
+- News: BBC World News RSS feed
+- Pool: SWM + ticos-systems visitor-count APIs (M-Bäder)
+- Gym: Fitness First usage API (club week endpoint)
 
 ## Notes
 
 - Widgets fetch from internal routes via TanStack Query.
 - Default query refresh interval is 60 seconds.
-- ETF widget includes a compact Recharts line chart.
+- ETF and macro widgets include compact Recharts charts.
 
 ## Deploy to Vercel
 

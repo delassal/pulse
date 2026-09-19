@@ -4,16 +4,22 @@ This document lists all internal API routes used by Pulse.
 
 ## GET /api/etf
 
-Purpose: Returns normalized ETF data for VWCE.DE.
+Purpose: Returns normalized data for the configured ETFs (S&P 500 IDUS.L, STOXX 600 EXSA.DE, EM IMI EIMU.L). Sourced from the Yahoo Finance chart API.
 
-Response:
+Query parameters:
+- isin (optional): return a single ETF object instead of the full array.
+
+Response (array, or a single object when `isin` is provided):
 - symbol: string
 - name: string
 - currency: string
 - price: number
 - dailyChangePct: number
+- ytdChangePct: number
 - trend: up | down | flat
 - history: { date: string; price: number }[]
+- fullHistory: { date: string; price: number }[]
+- asOf: string (ISO timestamp)
 - updatedAt: string (ISO timestamp)
 
 ## GET /api/macro
@@ -63,6 +69,22 @@ Response:
 - day: string
 - startTime: string (HH:mm:ss)
 - endTime: string (HH:mm:ss)
+- updatedAt: string (ISO timestamp)
+
+## GET /api/news
+
+Purpose: Returns the latest world news headlines for the daily briefing. Sourced from the BBC World News RSS feed.
+
+Response:
+- items: { title: string; description: string; url: string; pubDate: string }[] (up to 5)
+- source: string
+
+## GET /api/pool
+
+Purpose: Returns current occupancy for the configured M-Bäder areas (Dantebad Freibad, Dantebad Sauna, Olympia-Schwimmhalle). Partial failures are tolerated — only the areas that responded are returned.
+
+Response:
+- pools: { id: string; name: string; current: number; max: number; percentage: number; level: LOW | MEDIUM | HIGH }[]
 - updatedAt: string (ISO timestamp)
 
 ## Error format
