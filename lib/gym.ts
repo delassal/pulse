@@ -30,7 +30,11 @@ export async function getGymUsageData(): Promise<GymUsageData> {
   });
 
   if (!response.ok) {
-    throw new Error("Unable to fetch gym usage data");
+    throw new Error(
+      response.status === 503
+        ? "Fitness First is under maintenance (HTTP 503)"
+        : `Unable to fetch gym usage data (HTTP ${response.status})`,
+    );
   }
 
   const payload = (await response.json()) as GymUsageApiResponse;

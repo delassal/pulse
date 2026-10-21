@@ -23,6 +23,14 @@ function hasAnyFailure<T>(results: PromiseSettledResult<T>[]) {
   return results.some((result) => result.status === "rejected");
 }
 
+function withFirstFailureReason<T>(message: string, results: PromiseSettledResult<T>[]) {
+  const rejected = results.find(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  const reason = rejected?.reason instanceof Error ? rejected.reason.message : undefined;
+  return reason ? `${message}: ${reason}` : message;
+}
+
 export async function getMacroData(): Promise<MacroData> {
   const [marketsTodayResults, regionResults, macroContextResults] = await Promise.all([
     Promise.allSettled([fetchVix(), fetchEurUsd(), fetchOil(), fetchGold()]),
@@ -32,12 +40,16 @@ export async function getMacroData(): Promise<MacroData> {
 
   const marketsToday = fulfilledValues(marketsTodayResults);
   if (marketsToday.length === 0) {
-    throw new Error("Failed to fetch market indicators");
+    throw new Error(
+      withFirstFailureReason("Failed to fetch market indicators", marketsTodayResults),
+    );
   }
 
   const regions = fulfilledValues(regionResults);
   if (regions.length === 0) {
-    throw new Error("Failed to fetch regional macro context");
+    throw new Error(
+      withFirstFailureReason("Failed to fetch regional macro context", regionResults),
+    );
   }
 
   const macroEnvironment = [

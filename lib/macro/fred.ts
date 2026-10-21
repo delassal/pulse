@@ -47,6 +47,13 @@ export async function fetchCsvSeries(url: string): Promise<SeriesPoint[]> {
   }
 
   const text = await response.text();
+
+  // FRED serves its maintenance page with HTTP 200, so `response.ok` alone
+  // doesn't catch it — detect HTML instead of CSV.
+  if (text.trimStart().startsWith("<")) {
+    throw new Error("FRED is under maintenance (returned HTML instead of CSV)");
+  }
+
   const rows = csvToObjects(text);
   const seriesKey = getSeriesKey(url);
   const seriesEndDate = new Date().toISOString().slice(0, 10);
