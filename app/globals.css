@@ -18,6 +18,13 @@
   --grid: rgba(148, 163, 184, 0.42);
   --tooltip-bg: rgba(255, 255, 255, 0.95);
   --shadow: 0 20px 45px -24px rgba(15, 23, 42, 0.26);
+  --sev-none: #dbe2ec;
+  --sev-1: #9fd3c7;
+  --sev-2: #f2cf63;
+  --sev-3: #ef8a3c;
+  --sev-4: #d12f4b;
+  --map-ocean: rgba(148, 163, 184, 0.12);
+  --map-edge: #f4f7fb;
   --page-gradient:
     radial-gradient(circle at 12% 18%, rgba(96, 165, 250, 0.22) 0%, transparent 38%),
     radial-gradient(circle at 84% 2%, rgba(45, 212, 191, 0.18) 0%, transparent 30%),
@@ -43,6 +50,13 @@ html[data-theme="dark"] {
   --grid: rgba(148, 163, 184, 0.22);
   --tooltip-bg: rgba(8, 15, 27, 0.96);
   --shadow: 0 24px 55px -28px rgba(0, 0, 0, 0.7);
+  --sev-none: #1c2636;
+  --sev-1: #1f5f56;
+  --sev-2: #b08a24;
+  --sev-3: #cf6a2a;
+  --sev-4: #f0506b;
+  --map-ocean: rgba(148, 163, 184, 0.06);
+  --map-edge: #08111c;
   --page-gradient:
     radial-gradient(circle at 14% 16%, rgba(56, 189, 248, 0.16) 0%, transparent 34%),
     radial-gradient(circle at 78% 8%, rgba(16, 185, 129, 0.12) 0%, transparent 30%),

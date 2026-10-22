@@ -92,3 +92,28 @@ Response:
 All routes return this shape on server-side errors:
 
 - error: string
+
+## GET /api/travel
+
+Purpose: Returns travel advisories from three foreign ministries, joined per country, for the `/travel` world map and the dashboard travel card.
+
+Sources:
+- Germany: https://www.auswaertiges-amt.de/opendata/travelwarning (boolean `warning` / `partialWarning` per country, ISO alpha-2 `countryCode`)
+- United States: https://travel.state.gov/_res/rss/TAsTWs.xml (title `"<Country> - Level N: <text>"`; country tags are FIPS codes, so countries are matched by name)
+- Canada: https://data.international.gc.ca/travel-voyage/index-alpha-eng.json (`advisory-state` 0-3, `has-regional-advisory`)
+
+Severity is normalised to a shared 1-4 scale for colouring:
+- Germany: no warning = 1, partial warning = 3, warning = 4
+- United States: level 1-4 as published
+- Canada: advisory-state + 1
+
+Implementation notes:
+- Sources are fetched in parallel; a failing source is reported in `sources` instead of failing the whole response.
+- Complete responses are cached in memory for 1 hour.
+- US entries whose names cannot be matched to an ISO code are listed in `sources[].unmatched`; extend `US_NAME_ALIASES` in `lib/travel.ts` when one shows up.
+
+Response:
+- countries: { iso2: string; numeric: string | null; name: string; advisories: { de?: Advisory; us?: Advisory; ca?: Advisory } }[]
+  - Advisory: { severity: 1 | 2 | 3 | 4; label: string; regional: boolean; url?: string; updatedAt?: string }
+- sources: { id: "de" | "us" | "ca"; name: string; ok: boolean; count: number; error?: string; unmatched?: string[] }[]
+- updatedAt: string (ISO timestamp)
