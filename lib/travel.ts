@@ -33,6 +33,8 @@ type AdvisoryMap = Map<string, TravelAdvisory>;
 interface SourceResult {
   advisories: AdvisoryMap;
   unmatched?: string[];
+  /** Source-provided names for codes the ISO tables don't know (e.g. Canada's "PT-20" = Azores). */
+  names?: Map<string, string>;
 }
 
 async function fetchText(url: string): Promise<string> {
@@ -129,6 +131,18 @@ const US_NAME_ALIASES: Record<string, string[]> = {
   "falkland islands": ["FK"],
   "cote d ivoire": ["CI"],
   "kingdom of the netherlands": ["NL"],
+  "kingdom of denmark": ["DK"],
+  "kyrgyz republic": ["KG"],
+  "republic of congo": ["CG"],
+  "west bank": ["PS"],
+  gaza: ["PS"],
+  curacao: ["CW"],
+  "saint barthelemy": ["BL"],
+  bonaire: ["BQ"],
+  "saba and sint eustatius": ["BQ"],
+  "french saint martin": ["MF"],
+  // Martinique, St. Barthélemy and St. Martin have their own entries.
+  "french west indies": ["GP"],
 };
 
 function normaliseName(name: string): string {
@@ -141,14 +155,15 @@ function normaliseName(name: string): string {
 }
 
 export function resolveUsName(rawName: string): string[] {
-  const name = normaliseName(rawName);
+  const name = normaliseName(rawName)
+    .replace(/\s+Travel Advisory$/i, "")
+    .replace(/^the /i, "");
   const lower = name.toLowerCase();
 
   if (US_NAME_ALIASES[lower]) return US_NAME_ALIASES[lower];
 
   const candidates = [
     name,
-    name.replace(/^the /i, ""),
     name.replace(/^St\.? /i, "Saint "),
     name.replace(/\s*\(.*\)\s*$/, ""),
   ];
@@ -200,11 +215,20 @@ export function parseUnitedStates(xml: string): SourceResult {
     }
 
     for (const iso2 of codes) {
+      // Several feed entries can map to one country (West Bank + Gaza, Bonaire + Saba):
+      // keep the strictest level and flag it as regional when the levels differ.
+      const existing = advisories.get(iso2);
+      if (existing && existing.severity >= severity) {
+        existing.regional ||= existing.severity !== severity;
+        continue;
+      }
+
       advisories.set(iso2, {
         severity,
-        label: label.trim(),
+        // Some titles repeat the level ("Level 3: Reconsider Travel - Level 3: Reconsider Travel").
+        label: label.split(/\s+-\s+/)[0].trim(),
         // The feed has no explicit flag for region-only levels.
-        regional: false,
+        regional: Boolean(existing),
         url: url || undefined,
         updatedAt:
           parsedDate && !Number.isNaN(parsedDate.getTime())
@@ -234,6 +258,7 @@ const CA_LABELS: Record<number, string> = {
 
 interface CaEntry {
   "country-iso"?: string;
+  "country-eng"?: string;
   "advisory-state"?: number | string;
   "has-regional-advisory"?: number | string;
   "date-published"?: { timestamp?: number };
@@ -247,11 +272,15 @@ export function parseCanada(json: unknown): SourceResult {
   }
 
   const advisories: AdvisoryMap = new Map();
+  const names = new Map<string, string>();
 
   for (const [key, entry] of Object.entries(data)) {
     const iso2 = (entry["country-iso"] ?? key).toUpperCase();
     const state = Number(entry["advisory-state"]);
     if (!Number.isInteger(state) || state < 0 || state > 3) continue;
+
+    const name = entry["country-eng"]?.trim();
+    if (name) names.set(iso2, name);
 
     const slug = entry.eng?.["url-slug"];
     advisories.set(iso2, {
@@ -263,7 +292,7 @@ export function parseCanada(json: unknown): SourceResult {
     });
   }
 
-  return { advisories };
+  return { advisories, names };
 }
 
 // ---------------------------------------------------------------------------
@@ -278,11 +307,12 @@ const LOADERS: Record<TravelSourceId, () => Promise<SourceResult>> = {
 
 const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
 
-function countryName(iso2: string): string {
+function countryName(iso2: string, fallback?: string): string {
   try {
-    return regionNames.of(iso2) ?? countries.getName(iso2, "en") ?? iso2;
+    return regionNames.of(iso2) ?? countries.getName(iso2, "en") ?? fallback ?? iso2;
   } catch {
-    return countries.getName(iso2, "en") ?? iso2;
+    // Intl.DisplayNames throws on subdivision codes such as "PT-20".
+    return countries.getName(iso2, "en") ?? fallback ?? iso2;
   }
 }
 
@@ -307,7 +337,7 @@ export async function getTravelAdvisoryData(): Promise<TravelAdvisoryData> {
       return;
     }
 
-    const { advisories, unmatched } = result.value;
+    const { advisories, unmatched, names } = result.value;
     sources.push({
       id,
       name: SOURCE_NAMES[id],
@@ -322,7 +352,7 @@ export async function getTravelAdvisoryData(): Promise<TravelAdvisoryData> {
         country = {
           iso2,
           numeric: iso2 === "XK" ? null : (countries.alpha2ToNumeric(iso2) ?? null),
-          name: countryName(iso2),
+          name: countryName(iso2, names?.get(iso2)),
           advisories: {},
         };
         byCountry.set(iso2, country);

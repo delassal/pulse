@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type PointerEvent } from "react";
+import { useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { geoGraticule10, geoNaturalEarth1, geoPath } from "d3-geo";
 import { feature } from "topojson-client";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
@@ -101,7 +101,8 @@ interface TravelMapProps {
   selected: string | null;
   /** Bumped by the parent when the map should zoom to a country (list or search pick). */
   focus: { iso2: string; n: number } | null;
-  onSelect: (iso2: string) => void;
+  /** Called with null when the ocean or a country without data is clicked. */
+  onSelect: (iso2: string | null) => void;
 }
 
 export function TravelMap({ countries, view, selected, focus, onSelect }: TravelMapProps) {
@@ -180,10 +181,18 @@ export function TravelMap({ countries, view, selected, focus, onSelect }: Travel
     }, 0);
   }
 
-  function handleShapeClick(key: string) {
-    if (dragRef.current?.moved) return;
+  function handleShapeClick(event: MouseEvent<SVGPathElement>, key: string) {
     const country = byKey.get(key);
-    if (country) onSelect(country.iso2);
+    if (!country) return;
+    // Stop the click from reaching the svg, which would clear the selection again.
+    event.stopPropagation();
+    if (dragRef.current?.moved) return;
+    onSelect(country.iso2);
+  }
+
+  function handleBackgroundClick() {
+    if (dragRef.current?.moved) return;
+    onSelect(null);
   }
 
   return (
@@ -198,6 +207,7 @@ export function TravelMap({ countries, view, selected, focus, onSelect }: Travel
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onClick={handleBackgroundClick}
       >
         <g
           transform={`translate(${transform.x} ${transform.y}) scale(${transform.k})`}
@@ -223,7 +233,7 @@ export function TravelMap({ countries, view, selected, focus, onSelect }: Travel
                 strokeWidth={0.5}
                 vectorEffect="non-scaling-stroke"
                 className={country ? "cursor-pointer transition-[fill] duration-200" : undefined}
-                onClick={() => handleShapeClick(shape.key)}
+                onClick={(event) => handleShapeClick(event, shape.key)}
               >
                 {country ? <title>{country.name}</title> : null}
               </path>
