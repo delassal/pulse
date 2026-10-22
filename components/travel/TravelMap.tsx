@@ -1,0 +1,269 @@
+"use client";
+
+import { useMemo, useRef, useState, type PointerEvent } from "react";
+import { geoGraticule10, geoNaturalEarth1, geoPath } from "d3-geo";
+import { feature } from "topojson-client";
+import type { Feature, FeatureCollection, Geometry } from "geojson";
+import type { GeometryCollection, Topology } from "topojson-specification";
+import worldAtlas from "world-atlas/countries-110m.json";
+import { SEVERITY_COLOR, severityFor, type TravelView } from "@/lib/travel-meta";
+import type { TravelCountry } from "@/types";
+
+const WIDTH = 960;
+const HEIGHT = 500;
+
+// Shapes in the atlas without an ISO numeric id.
+const ALIAS_KEYS: Record<string, string> = {
+  Somaliland: "706",
+  "N. Cyprus": "196",
+  Kosovo: "XK",
+};
+
+interface MapShape {
+  key: string;
+  d: string;
+  bounds: [[number, number], [number, number]];
+}
+
+interface Transform {
+  k: number;
+  x: number;
+  y: number;
+}
+
+const IDENTITY: Transform = { k: 1, x: 0, y: 0 };
+
+function focusTransform(shape: MapShape): Transform {
+  const [[bx0, y0], [bx1, y1]] = shape.bounds;
+  let x0 = bx0;
+  let x1 = bx1;
+  // Russia and Fiji wrap around the antimeridian; fall back to a sensible box.
+  if (x1 - x0 > WIDTH * 0.6) {
+    x0 = WIDTH * 0.55;
+    x1 = WIDTH * 0.98;
+  }
+  const k = Math.min(6, 0.7 / Math.max((x1 - x0) / WIDTH, (y1 - y0) / HEIGHT));
+  return clampTransform({
+    k,
+    x: WIDTH / 2 - ((x0 + x1) / 2) * k,
+    y: HEIGHT / 2 - ((y0 + y1) / 2) * k,
+  });
+}
+
+function clampTransform(t: Transform): Transform {
+  const k = Math.min(10, Math.max(1, t.k));
+  const minX = WIDTH - WIDTH * k;
+  const minY = HEIGHT - HEIGHT * k;
+  return {
+    k,
+    x: Math.min(0, Math.max(minX, t.x)),
+    y: Math.min(0, Math.max(minY, t.y)),
+  };
+}
+
+const projection = geoNaturalEarth1().fitExtent(
+  [
+    [6, 6],
+    [WIDTH - 6, HEIGHT - 6],
+  ],
+  { type: "Sphere" },
+);
+const pathGenerator = geoPath(projection);
+
+function buildShapes(): { shapes: MapShape[]; sphere: string; graticule: string } {
+  const topology = worldAtlas as unknown as Topology<{ countries: GeometryCollection }>;
+  const collection = feature(topology, topology.objects.countries) as FeatureCollection<
+    Geometry,
+    { name: string }
+  >;
+
+  const shapes = collection.features.map((item: Feature<Geometry, { name: string }>) => {
+    const key = String(item.id ?? ALIAS_KEYS[item.properties.name] ?? item.properties.name);
+    return {
+      key,
+      d: pathGenerator(item) ?? "",
+      bounds: pathGenerator.bounds(item) as [[number, number], [number, number]],
+    };
+  });
+
+  return {
+    shapes,
+    sphere: pathGenerator({ type: "Sphere" }) ?? "",
+    graticule: pathGenerator(geoGraticule10()) ?? "",
+  };
+}
+
+const MAP = buildShapes();
+
+interface TravelMapProps {
+  countries: TravelCountry[];
+  view: TravelView;
+  selected: string | null;
+  /** Bumped by the parent when the map should zoom to a country (list or search pick). */
+  focus: { iso2: string; n: number } | null;
+  onSelect: (iso2: string) => void;
+}
+
+export function TravelMap({ countries, view, selected, focus, onSelect }: TravelMapProps) {
+  const { shapes, sphere, graticule } = MAP;
+  const [transform, setTransform] = useState<Transform>(IDENTITY);
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  const byKey = useMemo(() => {
+    const map = new Map<string, TravelCountry>();
+    for (const country of countries) {
+      map.set(country.numeric ?? country.iso2, country);
+    }
+    return map;
+  }, [countries]);
+
+  const selectedKey = useMemo(() => {
+    const country = countries.find((item) => item.iso2 === selected);
+    return country ? (country.numeric ?? country.iso2) : null;
+  }, [countries, selected]);
+
+  // Zoom when the parent requests focus (adjusting state during render, no effect needed).
+  const [handledFocus, setHandledFocus] = useState<number | null>(null);
+  if (focus && focus.n !== handledFocus) {
+    setHandledFocus(focus.n);
+    const country = countries.find((item) => item.iso2 === focus.iso2);
+    const key = country ? (country.numeric ?? country.iso2) : null;
+    const shape = key ? shapes.find((item) => item.key === key) : null;
+    if (shape) setTransform(focusTransform(shape));
+  }
+
+  function zoomBy(factor: number) {
+    setTransform((current) => {
+      const k = current.k * factor;
+      const cx = WIDTH / 2;
+      const cy = HEIGHT / 2;
+      return clampTransform({
+        k,
+        x: cx - ((cx - current.x) / current.k) * k,
+        y: cy - ((cy - current.y) / current.k) * k,
+      });
+    });
+  }
+
+  function toSvgUnits(dx: number, dy: number) {
+    const rect = svgRef.current?.getBoundingClientRect();
+    const scale = rect && rect.width > 0 ? WIDTH / rect.width : 1;
+    return { dx: dx * scale, dy: dy * scale };
+  }
+
+  function onPointerDown(event: PointerEvent<SVGSVGElement>) {
+    dragRef.current = { x: event.clientX, y: event.clientY, moved: false };
+  }
+
+  function onPointerMove(event: PointerEvent<SVGSVGElement>) {
+    const drag = dragRef.current;
+    if (!drag || transform.k === 1) return;
+    const { dx, dy } = toSvgUnits(event.clientX - drag.x, event.clientY - drag.y);
+    if (Math.abs(dx) + Math.abs(dy) < 3 && !drag.moved) return;
+    if (!drag.moved) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setDragging(true);
+    }
+    drag.moved = true;
+    drag.x = event.clientX;
+    drag.y = event.clientY;
+    setTransform((current) => clampTransform({ ...current, x: current.x + dx, y: current.y + dy }));
+  }
+
+  function onPointerUp() {
+    setDragging(false);
+    // Keep the flag until the click handler has run, then clear it.
+    setTimeout(() => {
+      dragRef.current = null;
+    }, 0);
+  }
+
+  function handleShapeClick(key: string) {
+    if (dragRef.current?.moved) return;
+    const country = byKey.get(key);
+    if (country) onSelect(country.iso2);
+  }
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl" style={{ background: "var(--map-ocean)" }}>
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+        className={`block h-auto w-full touch-pan-y select-none ${transform.k > 1 ? "cursor-grab" : ""}`}
+        role="img"
+        aria-label="World map of travel advisories"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+      >
+        <g
+          transform={`translate(${transform.x} ${transform.y}) scale(${transform.k})`}
+          style={{ transition: dragging ? "none" : "transform 350ms ease" }}
+        >
+          <path d={sphere} fill="var(--map-ocean)" />
+          <path
+            d={graticule}
+            fill="none"
+            stroke="var(--grid)"
+            strokeWidth={0.4}
+            vectorEffect="non-scaling-stroke"
+          />
+          {shapes.map((shape, index) => {
+            const country = byKey.get(shape.key);
+            const severity = severityFor(country, view);
+            return (
+              <path
+                key={`${shape.key}-${index}`}
+                d={shape.d}
+                fill={SEVERITY_COLOR[severity]}
+                stroke="var(--map-edge)"
+                strokeWidth={0.5}
+                vectorEffect="non-scaling-stroke"
+                className={country ? "cursor-pointer transition-[fill] duration-200" : undefined}
+                onClick={() => handleShapeClick(shape.key)}
+              >
+                {country ? <title>{country.name}</title> : null}
+              </path>
+            );
+          })}
+          {selectedKey
+            ? shapes
+                .filter((shape) => shape.key === selectedKey)
+                .map((shape, index) => (
+                  <path
+                    key={`sel-${index}`}
+                    d={shape.d}
+                    fill="none"
+                    stroke="var(--foreground)"
+                    strokeWidth={1.6}
+                    vectorEffect="non-scaling-stroke"
+                    pointerEvents="none"
+                  />
+                ))
+            : null}
+        </g>
+      </svg>
+
+      <div className="absolute right-2 top-2 flex flex-col gap-1.5">
+        {[
+          { label: "+", aria: "Zoom in", action: () => zoomBy(1.6) },
+          { label: "−", aria: "Zoom out", action: () => zoomBy(1 / 1.6) },
+          { label: "⟲", aria: "Reset view", action: () => setTransform(IDENTITY) },
+        ].map((button) => (
+          <button
+            key={button.aria}
+            type="button"
+            aria-label={button.aria}
+            onClick={button.action}
+            className="theme-panel theme-text flex h-8 w-8 items-center justify-center rounded-lg text-base font-semibold"
+          >
+            {button.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

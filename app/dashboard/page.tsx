@@ -3,6 +3,7 @@ import { EtfWidget } from "@/components/widgets/EtfWidget";
 import { GymWidget } from "@/components/widgets/GymWidget";
 import { MacroWidget } from "@/components/widgets/MacroWidget";
 import { PoolWidget } from "@/components/widgets/PoolWidget";
+import { TravelWidget } from "@/components/widgets/TravelWidget";
 import { DailyBriefingWidget } from "@/components/widgets/DailyBriefingWidget";
 import { FinancialsIcon, MacroIcon, PersonalIcon } from "@/components/ui/Icons";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
@@ -76,6 +77,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <PoolWidget />
             <GymWidget />
+            <TravelWidget />
           </div>
         </section>
 
