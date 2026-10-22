@@ -1,23 +1,25 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Flag } from "@/components/travel/Flag";
 import { TravelMap } from "@/components/travel/TravelMap";
 import {
   LEGENDS,
   SEVERITY_COLOR,
   SOURCE_LABELS,
+  SOURCE_ORDER,
   TRAVEL_VIEWS,
+  maxSeverity,
   severityFor,
   severitySpread,
-  type TravelView,
 } from "@/lib/travel-meta";
 import type { ApiError, TravelAdvisoryData, TravelCountry, TravelSourceId } from "@/types";
 
-const SOURCE_ORDER: TravelSourceId[] = ["de", "us", "ca"];
-
 async function fetchTravel(): Promise<TravelAdvisoryData> {
-  const response = await fetch("/api/travel");
+  // Revalidate instead of trusting the browser cache: the route sends max-age=3600, which
+  // otherwise keeps serving an outdated payload (e.g. without a newly added source).
+  const response = await fetch("/api/travel", { cache: "no-cache" });
   const body = (await response.json()) as TravelAdvisoryData | ApiError;
   if (!response.ok || "error" in body) {
     throw new Error("error" in body ? body.error : "Unable to load travel advisories");
@@ -46,51 +48,62 @@ function Swatch({ severity, size = 10 }: { severity: number; size?: number }) {
   );
 }
 
-function CountryDetail({ country }: { country: TravelCountry }) {
+function CountryPopup({ country, onClose }: { country: TravelCountry; onClose: () => void }) {
   return (
-    <div className="theme-surface rounded-2xl p-4 sm:p-5">
-      <p className="theme-muted text-xs font-medium uppercase tracking-wide">Selected country</p>
-      <h2 className="mt-1 text-xl font-semibold">{country.name}</h2>
-      <ul className="mt-3 divide-y" style={{ borderColor: "var(--border)" }}>
+    <div className="theme-tooltip rounded-2xl p-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="text-base font-semibold leading-tight">{country.name}</h2>
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className="theme-muted -mr-1 -mt-1 flex h-7 w-7 flex-none items-center justify-center rounded-lg text-lg leading-none hover:bg-[color:var(--accent-soft)]"
+        >
+          ×
+        </button>
+      </div>
+      <ul className="mt-2 divide-y" style={{ borderColor: "var(--border)" }}>
         {SOURCE_ORDER.map((id) => {
           const advisory = country.advisories[id];
+          const updated = formatDate(advisory?.updatedAt);
           return (
             <li
               key={id}
-              className="flex items-start gap-3 py-2.5"
+              className="flex items-start gap-2.5 py-2"
               style={{ borderColor: "var(--border)" }}
             >
-              <span className="mt-1.5">
-                <Swatch severity={advisory?.severity ?? 0} size={12} />
-              </span>
+              <Flag source={id} className="mt-0.5 h-3 w-4" />
               <div className="min-w-0 flex-1">
-                <p className="theme-subtle text-xs">{SOURCE_LABELS[id]}</p>
-                <p className="text-sm font-medium">
-                  {advisory ? advisory.label : "No data"}
-                  {advisory?.regional ? (
-                    <span className="theme-panel theme-muted ml-2 rounded-full px-2 py-0.5 text-[11px] font-medium">
-                      some regions only
-                    </span>
+                <p className="flex items-start gap-1.5 text-[13px] font-medium leading-snug">
+                  <span className="mt-[3px]">
+                    <Swatch severity={advisory?.severity ?? 0} />
+                  </span>
+                  <span>
+                    {advisory ? advisory.label : "No data"}
+                    {advisory?.regional ? (
+                      <span className="theme-panel theme-muted ml-1.5 whitespace-nowrap rounded-full px-1.5 py-px text-[10px] font-medium">
+                        some regions only
+                      </span>
+                    ) : null}
+                  </span>
+                </p>
+                <p className="theme-subtle mt-0.5 text-[11px]">
+                  {SOURCE_LABELS[id]}
+                  {updated ? ` · ${updated}` : null}
+                  {advisory?.url ? (
+                    <>
+                      {" · "}
+                      <a
+                        href={advisory.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-2"
+                      >
+                        Details
+                      </a>
+                    </>
                   ) : null}
                 </p>
-                {advisory?.updatedAt || advisory?.url ? (
-                  <p className="theme-subtle mt-0.5 text-xs">
-                    {formatDate(advisory.updatedAt) ? `Updated ${formatDate(advisory.updatedAt)}` : null}
-                    {advisory.url ? (
-                      <>
-                        {formatDate(advisory.updatedAt) ? " · " : null}
-                        <a
-                          href={advisory.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline underline-offset-2"
-                        >
-                          Details
-                        </a>
-                      </>
-                    ) : null}
-                  </p>
-                ) : null}
               </div>
             </li>
           );
@@ -108,10 +121,11 @@ export function TravelExplorer() {
     refetchInterval: false,
   });
 
-  const [view, setView] = useState<TravelView>("de");
+  const [view, setView] = useState<TravelSourceId>("de");
   const [selected, setSelected] = useState<string | null>(null);
   const [focus, setFocus] = useState<{ iso2: string; n: number } | null>(null);
   const [query, setQuery] = useState("");
+  const mapSectionRef = useRef<HTMLElement | null>(null);
 
   const countries = useMemo(() => data?.countries ?? [], [data]);
   const selectedCountry = countries.find((country) => country.iso2 === selected);
@@ -137,7 +151,7 @@ export function TravelExplorer() {
         .sort(
           (a, b) =>
             severitySpread(b) - severitySpread(a) ||
-            severityFor(b, "max") - severityFor(a, "max") ||
+            maxSeverity(b) - maxSeverity(a) ||
             a.name.localeCompare(b.name, "en"),
         )
         .slice(0, 12),
@@ -147,6 +161,8 @@ export function TravelExplorer() {
   function pick(iso2: string) {
     setSelected(iso2);
     setFocus((current) => ({ iso2, n: (current?.n ?? 0) + 1 }));
+    // Picks from the lists below the map: bring the map and its popup into view.
+    mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   function onSearch(value: string) {
@@ -161,7 +177,7 @@ export function TravelExplorer() {
   if (isLoading) {
     return (
       <div className="theme-surface flex aspect-[96/50] items-center justify-center rounded-2xl">
-        <p className="theme-muted text-sm">Loading advisories from three foreign ministries…</p>
+        <p className="theme-muted text-sm">Loading advisories from four foreign ministries…</p>
       </div>
     );
   }
@@ -183,7 +199,7 @@ export function TravelExplorer() {
         <div className="theme-toggle inline-flex w-full items-center rounded-full p-1 sm:w-auto" role="tablist">
           {TRAVEL_VIEWS.map((option) => {
             const source = data.sources.find((item) => item.id === option.id);
-            const unavailable = source ? !source.ok : false;
+            const unavailable = !source?.ok;
             return (
               <button
                 key={option.id}
@@ -192,10 +208,11 @@ export function TravelExplorer() {
                 aria-selected={view === option.id}
                 disabled={unavailable}
                 onClick={() => setView(option.id)}
-                className={`theme-toggle-option flex-1 rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide disabled:opacity-40 sm:flex-none ${
+                className={`theme-toggle-option flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide disabled:opacity-40 sm:flex-none ${
                   view === option.id ? "theme-toggle-option-active" : ""
                 }`}
               >
+                <Flag source={option.id} className="h-3.5 w-[18px]" />
                 <span className="sm:hidden">{option.short}</span>
                 <span className="hidden sm:inline">{option.label}</span>
               </button>
@@ -221,13 +238,18 @@ export function TravelExplorer() {
         </label>
       </div>
 
-      <section className="theme-surface rounded-2xl p-3 sm:p-4">
+      <section ref={mapSectionRef} className="theme-surface scroll-mt-4 rounded-2xl p-3 sm:p-4">
         <TravelMap
           countries={countries}
           view={view}
           selected={selected}
           focus={focus}
           onSelect={setSelected}
+          popup={
+            selectedCountry ? (
+              <CountryPopup country={selectedCountry} onClose={() => setSelected(null)} />
+            ) : null
+          }
         />
         <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 px-1">
           {LEGENDS[view].map((item) => (
@@ -241,16 +263,16 @@ export function TravelExplorer() {
             <Swatch severity={0} />
             No data
           </li>
+          <li className="theme-subtle flex items-center gap-2 text-xs">
+            <span aria-hidden className="inline-block h-2.5 w-2.5 flex-none rounded-[3px] bg-[color:var(--map-home)]" />
+            Issuing country
+          </li>
         </ul>
       </section>
 
-      {selectedCountry ? (
-        <CountryDetail country={selectedCountry} />
-      ) : (
-        <p className="theme-subtle px-1 text-sm">
-          Tap a country to compare what Germany, the US and Canada advise.
-        </p>
-      )}
+      <p className="theme-subtle px-1 text-sm">
+        Tap a country to compare what Germany, the US, Canada and the UK advise.
+      </p>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section className="theme-surface min-w-0 rounded-2xl p-4 sm:p-5">
@@ -276,7 +298,7 @@ export function TravelExplorer() {
 
         <section className="theme-surface min-w-0 rounded-2xl p-4 sm:p-5">
           <p className="theme-muted text-xs font-medium uppercase tracking-wide">Where sources disagree</p>
-          <p className="theme-subtle mt-1 text-sm">At least two levels apart between DE, US and CA.</p>
+          <p className="theme-subtle mt-1 text-sm">At least two levels apart between the four sources.</p>
           <ul className="mt-3 space-y-1">
             {disagreements.map((country) => (
               <li key={country.iso2}>
@@ -287,9 +309,9 @@ export function TravelExplorer() {
                 >
                   <span className="min-w-0 flex-1 truncate">{country.name}</span>
                   {SOURCE_ORDER.map((id) => (
-                    <span key={id} className="theme-subtle flex items-center gap-1 text-[11px] tabular-nums">
+                    <span key={id} className="flex items-center gap-1">
+                      <Flag source={id} />
                       <Swatch severity={country.advisories[id]?.severity ?? 0} />
-                      {id.toUpperCase()}
                     </span>
                   ))}
                 </button>
@@ -313,7 +335,9 @@ export function TravelExplorer() {
         ))}
         <p>
           Levels are mapped onto a shared 1 to 4 scale for colouring. Germany only distinguishes no warning, partial
-          warning and full warning. Always check the official advisory before travelling.
+          warning and full warning; the UK has no &ldquo;increased caution&rdquo; tier, so its level 2 means advice
+          against all but essential travel to parts of a country. Always check the official advisory before
+          travelling.
         </p>
       </footer>
     </div>

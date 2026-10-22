@@ -7,7 +7,7 @@ Pulse is a mobile-first personal morning-briefing dashboard MVP. It surfaces a q
 - Macro & markets briefing (daily market pulse + structural macro context)
 - M-Bäder pool occupancy (Munich)
 - Fitness First gym occupancy (club 2405764950, München Moosach)
-- Travel advisories world map (`/travel`): Germany, US and Canada side by side
+- Travel advisories world map (`/travel`): Germany, US, Canada and UK side by side
 
 Built with:
 
@@ -105,7 +105,7 @@ See [CLAUDE.md](CLAUDE.md) for the authoritative architecture, caching, and them
 - News: BBC World News RSS feed
 - Pool: SWM + ticos-systems visitor-count APIs (M-Bäder)
 - Gym: Fitness First usage API (club week endpoint)
-- Travel: Auswärtiges Amt Open Data, US State Department advisory RSS, Global Affairs Canada open data
+- Travel: Auswärtiges Amt Open Data, US State Department advisory RSS, Global Affairs Canada open data, UK FCDO travel advice (GOV.UK Content API)
 
 ## Notes
 

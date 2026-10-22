@@ -223,3 +223,21 @@ export function GlobeIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function TravelIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M19.5 12.4A8.5 8.5 0 1 1 11.6 4.5" />
+      <path d="M2.6 13h17" />
+      <path d="M11 4.6c-2.3 2.4-3.4 5.2-3.4 8.4s1.1 6 3.4 8.4c2.3-2.4 3.4-5.2 3.4-8.4" />
+      {/* Plane silhouette from Material Icons "flight" (Apache 2.0) */}
+      <g
+        transform="translate(18.2 5.8) rotate(45) scale(0.46) translate(-11.5 -12)"
+        fill="currentColor"
+        stroke="none"
+      >
+        <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" />
+      </g>
+    </svg>
+  );
+}

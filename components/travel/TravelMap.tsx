@@ -1,13 +1,22 @@
 "use client";
 
-import { useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type PointerEvent,
+  type ReactNode,
+} from "react";
 import { geoGraticule10, geoNaturalEarth1, geoPath } from "d3-geo";
 import { feature } from "topojson-client";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 import type { GeometryCollection, Topology } from "topojson-specification";
 import worldAtlas from "world-atlas/countries-110m.json";
-import { SEVERITY_COLOR, severityFor, type TravelView } from "@/lib/travel-meta";
-import type { TravelCountry } from "@/types";
+import { SEVERITY_COLOR, SOURCE_HOME, severityFor } from "@/lib/travel-meta";
+import type { TravelCountry, TravelSourceId } from "@/types";
 
 const WIDTH = 960;
 const HEIGHT = 500;
@@ -97,20 +106,50 @@ const MAP = buildShapes();
 
 interface TravelMapProps {
   countries: TravelCountry[];
-  view: TravelView;
+  view: TravelSourceId;
   selected: string | null;
   /** Bumped by the parent when the map should zoom to a country (list or search pick). */
   focus: { iso2: string; n: number } | null;
   /** Called with null when the ocean or a country without data is clicked. */
   onSelect: (iso2: string | null) => void;
+  /** Details for the selected country, shown in a popup next to it. */
+  popup?: ReactNode;
 }
 
-export function TravelMap({ countries, view, selected, focus, onSelect }: TravelMapProps) {
+const POPUP_WIDTH = 296;
+const POPUP_GAP = 10;
+
+export function TravelMap({ countries, view, selected, focus, onSelect, popup }: TravelMapProps) {
   const { shapes, sphere, graticule } = MAP;
   const [transform, setTransform] = useState<Transform>(IDENTITY);
   const [dragging, setDragging] = useState(false);
+  // Popup anchor in untransformed map units, so it follows zoom and pan.
+  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [width, setWidth] = useState(0);
   const dragRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const element = wrapperRef.current;
+    if (!element) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      setWidth(entry.contentRect.width);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!selected) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onSelect(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selected, onSelect]);
 
   const byKey = useMemo(() => {
     const map = new Map<string, TravelCountry>();
@@ -132,7 +171,14 @@ export function TravelMap({ countries, view, selected, focus, onSelect }: Travel
     const country = countries.find((item) => item.iso2 === focus.iso2);
     const key = country ? (country.numeric ?? country.iso2) : null;
     const shape = key ? shapes.find((item) => item.key === key) : null;
-    if (shape) setTransform(focusTransform(shape));
+    if (shape) {
+      setTransform(focusTransform(shape));
+      const [[x0, y0], [x1, y1]] = shape.bounds;
+      setAnchor({ x: (x0 + x1) / 2, y: (y0 + y1) / 2 });
+    } else {
+      // Too small for the 110m atlas (e.g. Singapore): the popup sits at the top instead.
+      setAnchor(null);
+    }
   }
 
   function zoomBy(factor: number) {
@@ -187,6 +233,15 @@ export function TravelMap({ countries, view, selected, focus, onSelect }: Travel
     // Stop the click from reaching the svg, which would clear the selection again.
     event.stopPropagation();
     if (dragRef.current?.moved) return;
+
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (rect && rect.width > 0) {
+      const scale = WIDTH / rect.width;
+      setAnchor({
+        x: ((event.clientX - rect.left) * scale - transform.x) / transform.k,
+        y: ((event.clientY - rect.top) * scale - transform.y) / transform.k,
+      });
+    }
     onSelect(country.iso2);
   }
 
@@ -195,85 +250,126 @@ export function TravelMap({ countries, view, selected, focus, onSelect }: Travel
     onSelect(null);
   }
 
-  return (
-    <div className="relative overflow-hidden rounded-2xl" style={{ background: "var(--map-ocean)" }}>
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className={`block h-auto w-full touch-pan-y select-none ${transform.k > 1 ? "cursor-grab" : ""}`}
-        role="img"
-        aria-label="World map of travel advisories"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onClick={handleBackgroundClick}
-      >
-        <g
-          transform={`translate(${transform.x} ${transform.y}) scale(${transform.k})`}
-          style={{ transition: dragging ? "none" : "transform 350ms ease" }}
-        >
-          <path d={sphere} fill="var(--map-ocean)" />
-          <path
-            d={graticule}
-            fill="none"
-            stroke="var(--grid)"
-            strokeWidth={0.4}
-            vectorEffect="non-scaling-stroke"
-          />
-          {shapes.map((shape, index) => {
-            const country = byKey.get(shape.key);
-            const severity = severityFor(country, view);
-            return (
-              <path
-                key={`${shape.key}-${index}`}
-                d={shape.d}
-                fill={SEVERITY_COLOR[severity]}
-                stroke="var(--map-edge)"
-                strokeWidth={0.5}
-                vectorEffect="non-scaling-stroke"
-                className={country ? "cursor-pointer transition-[fill] duration-200" : undefined}
-                onClick={(event) => handleShapeClick(event, shape.key)}
-              >
-                {country ? <title>{country.name}</title> : null}
-              </path>
-            );
-          })}
-          {selectedKey
-            ? shapes
-                .filter((shape) => shape.key === selectedKey)
-                .map((shape, index) => (
-                  <path
-                    key={`sel-${index}`}
-                    d={shape.d}
-                    fill="none"
-                    stroke="var(--foreground)"
-                    strokeWidth={1.6}
-                    vectorEffect="non-scaling-stroke"
-                    pointerEvents="none"
-                  />
-                ))
-            : null}
-        </g>
-      </svg>
+  function popupStyle(): CSSProperties {
+    const popupWidth = Math.min(POPUP_WIDTH, width - 16);
+    const mapHeight = (width * HEIGHT) / WIDTH;
+    const transition = dragging ? "none" : "left 350ms ease, top 350ms ease";
 
-      <div className="absolute right-2 top-2 flex flex-col gap-1.5">
-        {[
-          { label: "+", aria: "Zoom in", action: () => zoomBy(1.6) },
-          { label: "−", aria: "Zoom out", action: () => zoomBy(1 / 1.6) },
-          { label: "⟲", aria: "Reset view", action: () => setTransform(IDENTITY) },
-        ].map((button) => (
-          <button
-            key={button.aria}
-            type="button"
-            aria-label={button.aria}
-            onClick={button.action}
-            className="theme-panel theme-text flex h-8 w-8 items-center justify-center rounded-lg text-base font-semibold"
+    // On phones the map is too small to place the popup beside a country; dock it below.
+    if (width < 480) {
+      return { width: width - 16, left: 8, top: mapHeight + 8 };
+    }
+
+    if (!anchor) {
+      return { width: popupWidth, left: (width - popupWidth) / 2, top: 8, transition };
+    }
+
+    const scale = width / WIDTH;
+    const x = (anchor.x * transform.k + transform.x) * scale;
+    const y = Math.min(mapHeight, Math.max(0, (anchor.y * transform.k + transform.y) * scale));
+    // Open towards the side of the map with more room.
+    const above = y > mapHeight / 2;
+
+    return {
+      width: popupWidth,
+      left: Math.min(width - popupWidth - 8, Math.max(8, x - popupWidth / 2)),
+      top: above ? y - POPUP_GAP : y + POPUP_GAP,
+      transform: above ? "translateY(-100%)" : undefined,
+      transition,
+    };
+  }
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <div className="relative overflow-hidden rounded-2xl" style={{ background: "var(--map-ocean)" }}>
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+          className={`block h-auto w-full touch-pan-y select-none ${transform.k > 1 ? "cursor-grab" : ""}`}
+          role="img"
+          aria-label="World map of travel advisories"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onClick={handleBackgroundClick}
+        >
+          <g
+            transform={`translate(${transform.x} ${transform.y}) scale(${transform.k})`}
+            style={{ transition: dragging ? "none" : "transform 350ms ease" }}
           >
-            {button.label}
-          </button>
-        ))}
+            <path d={sphere} fill="var(--map-ocean)" />
+            <path
+              d={graticule}
+              fill="none"
+              stroke="var(--grid)"
+              strokeWidth={0.4}
+              vectorEffect="non-scaling-stroke"
+            />
+            {shapes.map((shape, index) => {
+              const country = byKey.get(shape.key);
+              // The issuing country has no advisory about itself, so it is marked in blue.
+              const fill =
+                shape.key === SOURCE_HOME[view]
+                  ? "var(--map-home)"
+                  : SEVERITY_COLOR[severityFor(country, view)];
+              return (
+                <path
+                  key={`${shape.key}-${index}`}
+                  d={shape.d}
+                  fill={fill}
+                  stroke="var(--map-edge)"
+                  strokeWidth={0.5}
+                  vectorEffect="non-scaling-stroke"
+                  className={country ? "cursor-pointer transition-[fill] duration-200" : undefined}
+                  onClick={(event) => handleShapeClick(event, shape.key)}
+                >
+                  {country ? <title>{country.name}</title> : null}
+                </path>
+              );
+            })}
+            {selectedKey
+              ? shapes
+                  .filter((shape) => shape.key === selectedKey)
+                  .map((shape, index) => (
+                    <path
+                      key={`sel-${index}`}
+                      d={shape.d}
+                      fill="none"
+                      stroke="var(--foreground)"
+                      strokeWidth={1.6}
+                      vectorEffect="non-scaling-stroke"
+                      pointerEvents="none"
+                    />
+                  ))
+              : null}
+          </g>
+        </svg>
+
+        <div className="absolute right-2 top-2 flex flex-col gap-1.5">
+          {[
+            { label: "+", aria: "Zoom in", action: () => zoomBy(1.6) },
+            { label: "−", aria: "Zoom out", action: () => zoomBy(1 / 1.6) },
+            { label: "⟲", aria: "Reset view", action: () => setTransform(IDENTITY) },
+          ].map((button) => (
+            <button
+              key={button.aria}
+              type="button"
+              aria-label={button.aria}
+              onClick={button.action}
+              className="theme-panel theme-text flex h-8 w-8 items-center justify-center rounded-lg text-base font-semibold"
+            >
+              {button.label}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {selected && popup && width > 0 ? (
+        <div role="dialog" aria-label="Country details" className="absolute z-20" style={popupStyle()}>
+          {popup}
+        </div>
+      ) : null}
     </div>
   );
 }

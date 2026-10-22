@@ -17,6 +17,10 @@ const DE_URL = "https://www.auswaertiges-amt.de/opendata/travelwarning";
 const US_URL = "https://travel.state.gov/_res/rss/TAsTWs.xml";
 // Canada: Global Affairs Canada open data (advisory-state 0-3, ISO country keys)
 const CA_URL = "https://data.international.gc.ca/travel-voyage/index-alpha-eng.json";
+// United Kingdom: FCDO travel advice via the GOV.UK Content API. The index lists the
+// country pages; the alert status is only on each page, so every page is fetched.
+const UK_INDEX_URL = "https://www.gov.uk/api/content/foreign-travel-advice";
+const UK_CONCURRENCY = 8;
 
 const USER_AGENT =
   "Mozilla/5.0 (compatible; Pulse/1.0; personal dashboard; +https://danielelassal.com)";
@@ -26,6 +30,7 @@ const SOURCE_NAMES: Record<TravelSourceId, string> = {
   de: "Germany (Auswärtiges Amt)",
   us: "United States (State Department)",
   ca: "Canada (Global Affairs)",
+  uk: "United Kingdom (FCDO)",
 };
 
 type AdvisoryMap = Map<string, TravelAdvisory>;
@@ -105,11 +110,11 @@ export function parseGermany(json: unknown): SourceResult {
 }
 
 // ---------------------------------------------------------------------------
-// United States
+// Country name matching (US and UK publish names, not ISO codes)
 // ---------------------------------------------------------------------------
 
-// Names in the US feed that do not resolve through the ISO name table.
-const US_NAME_ALIASES: Record<string, string[]> = {
+// Names in the US and UK feeds that do not resolve through the ISO name table.
+const NAME_ALIASES: Record<string, string[]> = {
   burma: ["MM"],
   "burma (myanmar)": ["MM"],
   "mainland china": ["CN"],
@@ -143,6 +148,16 @@ const US_NAME_ALIASES: Record<string, string[]> = {
   "french saint martin": ["MF"],
   // Martinique, St. Barthélemy and St. Martin have their own entries.
   "french west indies": ["GP"],
+  // UK
+  "pitcairn island": ["PN"],
+  "bonaire/st eustatius/saba": ["BQ"],
+  "st maarten": ["SX"],
+  "st martin and st barthelemy": ["MF", "BL"],
+  "st helena, ascension and tristan da cunha": ["SH"],
+  "cook islands, tokelau and niue": ["CK", "TK", "NU"],
+  "antarctica/british antarctic territory": ["AQ"],
+  reunion: ["RE"],
+  "sao tome and principe": ["ST"],
 };
 
 function normaliseName(name: string): string {
@@ -154,17 +169,17 @@ function normaliseName(name: string): string {
     .trim();
 }
 
-export function resolveUsName(rawName: string): string[] {
+export function resolveCountryName(rawName: string): string[] {
   const name = normaliseName(rawName)
     .replace(/\s+Travel Advisory$/i, "")
     .replace(/^the /i, "");
   const lower = name.toLowerCase();
 
-  if (US_NAME_ALIASES[lower]) return US_NAME_ALIASES[lower];
+  if (NAME_ALIASES[lower]) return NAME_ALIASES[lower];
 
   const candidates = [
     name,
-    name.replace(/^St\.? /i, "Saint "),
+    name.replace(/^St\.? /i, "Saint ").replace(/ & /g, " and "),
     name.replace(/\s*\(.*\)\s*$/, ""),
   ];
 
@@ -175,6 +190,10 @@ export function resolveUsName(rawName: string): string[] {
 
   return [];
 }
+
+// ---------------------------------------------------------------------------
+// United States
+// ---------------------------------------------------------------------------
 
 function extractTag(xml: string, tag: string): string {
   const match = xml.match(
@@ -207,7 +226,7 @@ export function parseUnitedStates(xml: string): SourceResult {
     const url = extractTag(block, "link") || extractTag(block, "guid");
     const pubDate = extractTag(block, "pubDate");
     const parsedDate = pubDate ? new Date(pubDate) : null;
-    const codes = resolveUsName(rawName);
+    const codes = resolveCountryName(rawName);
 
     if (codes.length === 0) {
       unmatched.push(rawName);
@@ -296,6 +315,132 @@ export function parseCanada(json: unknown): SourceResult {
 }
 
 // ---------------------------------------------------------------------------
+// United Kingdom
+// ---------------------------------------------------------------------------
+
+// FCDO alert statuses mapped onto the shared scale. The UK has no "increased caution"
+// tier, so a region-only "all but essential" advisory takes level 2.
+const UK_ALERTS: Record<string, { severity: TravelSeverity; label: string; regional: boolean }> = {
+  avoid_all_travel_to_whole_country: {
+    severity: 4,
+    label: "Advise against all travel",
+    regional: false,
+  },
+  avoid_all_travel_to_parts: {
+    severity: 3,
+    label: "Advise against all travel to parts",
+    regional: true,
+  },
+  avoid_all_but_essential_travel_to_whole_country: {
+    severity: 3,
+    label: "Advise against all but essential travel",
+    regional: false,
+  },
+  avoid_all_but_essential_travel_to_parts: {
+    severity: 2,
+    label: "Advise against all but essential travel to parts",
+    regional: true,
+  },
+};
+
+interface UkIndexChild {
+  api_url?: string;
+  web_url?: string;
+  withdrawn?: boolean;
+  details?: { country?: { name?: string } };
+}
+
+interface UkCountryPage {
+  web_url?: string;
+  public_updated_at?: string;
+  details?: { alert_status?: string[]; country?: { name?: string } };
+}
+
+export function parseUnitedKingdomPage(json: unknown): TravelAdvisory {
+  const page = json as UkCountryPage;
+  const alerts = (page.details?.alert_status ?? [])
+    .map((status) => UK_ALERTS[status])
+    .filter(Boolean)
+    // Strictest first; on a tie the whole-country advisory wins over the regional one.
+    .sort((a, b) => b.severity - a.severity || Number(a.regional) - Number(b.regional));
+
+  const updated = page.public_updated_at ? new Date(page.public_updated_at) : null;
+
+  return {
+    severity: alerts[0]?.severity ?? 1,
+    label: alerts.length
+      ? alerts.map((alert) => alert.label).join("; ")
+      : "No advice against travel",
+    regional: alerts[0]?.regional ?? false,
+    url: page.web_url,
+    updatedAt: updated && !Number.isNaN(updated.getTime()) ? updated.toISOString() : undefined,
+  };
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  task: (item: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let next = 0;
+
+  async function worker() {
+    while (next < items.length) {
+      const index = next++;
+      try {
+        results[index] = { status: "fulfilled", value: await task(items[index]) };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+async function loadUnitedKingdom(): Promise<SourceResult> {
+  const index = JSON.parse(await fetchText(UK_INDEX_URL)) as {
+    links?: { children?: UkIndexChild[] };
+  };
+  const children = (index.links?.children ?? []).filter(
+    (child) => child.api_url && child.details?.country?.name && !child.withdrawn,
+  );
+  if (children.length === 0) {
+    throw new Error("No countries found in index");
+  }
+
+  const pages = await mapWithConcurrency(children, UK_CONCURRENCY, async (child) =>
+    parseUnitedKingdomPage(JSON.parse(await fetchText(child.api_url!))),
+  );
+
+  // A few failed pages leave gaps on the map; many failures mean the source is down.
+  const failed = pages.filter((page) => page.status === "rejected").length;
+  if (failed > children.length * 0.1) {
+    throw new Error(`${failed} of ${children.length} country pages failed`);
+  }
+
+  const advisories: AdvisoryMap = new Map();
+  const unmatched: string[] = [];
+
+  children.forEach((child, i) => {
+    const page = pages[i];
+    if (page.status !== "fulfilled") return;
+
+    const name = child.details!.country!.name!;
+    const codes = resolveCountryName(name);
+    if (codes.length === 0) {
+      unmatched.push(name);
+      return;
+    }
+    for (const iso2 of codes) advisories.set(iso2, page.value);
+  });
+
+  return { advisories, unmatched };
+}
+
+// ---------------------------------------------------------------------------
 // Combined
 // ---------------------------------------------------------------------------
 
@@ -303,6 +448,7 @@ const LOADERS: Record<TravelSourceId, () => Promise<SourceResult>> = {
   de: async () => parseGermany(JSON.parse(await fetchText(DE_URL))),
   us: async () => parseUnitedStates(await fetchText(US_URL)),
   ca: async () => parseCanada(JSON.parse(await fetchText(CA_URL))),
+  uk: loadUnitedKingdom,
 };
 
 const regionNames = new Intl.DisplayNames(["en"], { type: "region" });

@@ -25,6 +25,7 @@
   --sev-4: #d12f4b;
   --map-ocean: rgba(148, 163, 184, 0.12);
   --map-edge: #f4f7fb;
+  --map-home: #2563eb;
   --page-gradient:
     radial-gradient(circle at 12% 18%, rgba(96, 165, 250, 0.22) 0%, transparent 38%),
     radial-gradient(circle at 84% 2%, rgba(45, 212, 191, 0.18) 0%, transparent 30%),
@@ -57,6 +58,7 @@ html[data-theme="dark"] {
   --sev-4: #f0506b;
   --map-ocean: rgba(148, 163, 184, 0.06);
   --map-edge: #08111c;
+  --map-home: #4f8df7;
   --page-gradient:
     radial-gradient(circle at 14% 16%, rgba(56, 189, 248, 0.16) 0%, transparent 34%),
     radial-gradient(circle at 78% 8%, rgba(16, 185, 129, 0.12) 0%, transparent 30%),

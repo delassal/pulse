@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { TravelExplorer } from "@/components/travel/TravelExplorer";
+import { TravelIcon } from "@/components/ui/Icons";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 export const metadata: Metadata = {
   title: "Travel advisories · Pulse",
-  description: "World map comparing travel advisories from Germany, the United States and Canada",
+  description:
+    "World map comparing travel advisories from Germany, the United States, Canada and the United Kingdom",
+  // Replaces the root layout's icons for this page (metadata is merged shallowly).
+  icons: { icon: "/travel-icon.svg" },
 };
 
 export default function TravelPage() {
@@ -16,9 +20,14 @@ export default function TravelPage() {
           <Link href="/dashboard" className="theme-subtle text-sm hover:underline">
             ← Pulse
           </Link>
-          <h1 className="mt-3 text-2xl font-semibold">Travel advisories</h1>
+          <div className="mt-3 flex items-center gap-3">
+            <div className="theme-icon-shell flex h-10 w-10 flex-none items-center justify-center rounded-xl">
+              <TravelIcon className="h-5 w-5" />
+            </div>
+            <h1 className="text-2xl font-semibold">Travel advisories</h1>
+          </div>
           <p className="theme-subtle mt-2 text-sm">
-            Germany, the US and Canada side by side, straight from their open data.
+            Germany, the US, Canada and the UK side by side, straight from their open data.
           </p>
         </div>
         <div className="hidden sm:block">

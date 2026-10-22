@@ -115,7 +115,7 @@ export interface PoolData {
   updatedAt: string;
 }
 
-export type TravelSourceId = "de" | "us" | "ca";
+export type TravelSourceId = "de" | "us" | "ca" | "uk";
 
 /** Severity on a shared 1-4 scale used for map colouring (4 = most severe). */
 export type TravelSeverity = 1 | 2 | 3 | 4;
