@@ -1,4 +1,4 @@
-// FRED (Federal Reserve Economic Data) CSV series + the market/PMI indicators
+// FRED (Federal Reserve Economic Data) CSV series + the market indicators
 // and the US deposit-facility rate that are sourced from it.
 
 import type { MacroIndicator } from "@/types";
@@ -8,9 +8,7 @@ import {
   FRED_DEPOSIT_FACILITY_US_URL,
   FRED_EURUSD_URL,
   FRED_FEDFUNDS_URL,
-  FRED_GOLD_URL,
   FRED_OIL_URL,
-  FRED_PMI_URL,
   FRED_VIX_URL,
   MACRO_HISTORY_POINTS,
   MARKET_HISTORY_POINTS,
@@ -119,14 +117,4 @@ export async function fetchEurUsd(): Promise<MacroIndicator> {
 export async function fetchOil(): Promise<MacroIndicator> {
   const points = await fetchCsvSeries(FRED_OIL_URL);
   return buildIndicator("oil_wti", "Oil (WTI)", "$", points, MARKET_HISTORY_POINTS);
-}
-
-export async function fetchGold(): Promise<MacroIndicator> {
-  const points = await fetchCsvSeries(FRED_GOLD_URL);
-  return buildIndicator("gold", "Gold", "$", points, MARKET_HISTORY_POINTS);
-}
-
-export async function fetchPmi(): Promise<MacroIndicator> {
-  const points = await fetchCsvSeries(FRED_PMI_URL);
-  return buildIndicator("pmi", "PMI (US ISM)", "idx", points, MACRO_HISTORY_POINTS);
 }

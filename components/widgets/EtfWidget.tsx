@@ -323,15 +323,16 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
       <div className="space-y-3">
         <div>
           <p className="theme-muted text-xs">As of {formatAsOf(data.asOf)}</p>
-          <div className="mt-2 flex gap-2">
+          <div className="theme-toggle mt-2 inline-flex items-center rounded-full p-1" role="tablist">
             {(["max", "5y", "ytd"] as const).map((range) => (
               <button
                 key={range}
+                type="button"
+                role="tab"
+                aria-selected={selectedRange === range}
                 onClick={() => setSelectedRange(range)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  selectedRange === range
-                    ? "bg-[color:var(--primary)] border border-[color:var(--primary)] shadow-sm theme-text"
-                    : "theme-text border border-[color:var(--grid)] hover:bg-[color:var(--surface-hover)]"
+                className={`theme-toggle-option rounded-full px-3 py-1 text-xs font-semibold tracking-wide ${
+                  selectedRange === range ? "theme-toggle-option-active" : ""
                 }`}
               >
                 {range === "ytd" ? "YTD" : range === "5y" ? "5Y" : "Max"}

@@ -31,7 +31,7 @@ const MARKET_EXPLAINERS: Record<string, string> = {
   vix: "Expected 30-day swings of the S&P 500. Below 15 is calm, above 25 signals market stress.",
   eur_usd: "US dollars per euro. Rising means a stronger euro, making US assets and imports cheaper for you.",
   oil_wti: "US crude benchmark in USD per barrel. Feeds into fuel prices and headline inflation.",
-  gold: "USD per troy ounce. A safe haven that tends to rise on uncertainty or falling real rates.",
+  gold: "COMEX futures in USD per troy ounce. A safe haven that tends to rise on uncertainty or falling real rates.",
 };
 
 const REGION_FLAGS: Record<RegionId, FlagCode> = {
@@ -614,7 +614,7 @@ export function MacroWidget() {
               ))}
             </div>
           </header>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {data.marketsToday.map((indicator) => (
               <MarketCard key={indicator.id} indicator={indicator} range={marketRange} />
             ))}

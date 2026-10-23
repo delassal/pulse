@@ -1,17 +1,12 @@
-// Public entry point for the macro data layer: assembles market indicators,
-// regional inflation/policy-rate context, and the PMI into a single payload.
+// Public entry point for the macro data layer: assembles market indicators
+// and regional inflation/policy-rate context into a single payload.
 // Partial upstream failures are tolerated and signalled via `sources: [..., "partial"]`.
 
 import type { MacroData } from "@/types";
 import { REGION_SERIES_CONFIGS } from "@/lib/macro/constants";
-import {
-  fetchEurUsd,
-  fetchGold,
-  fetchOil,
-  fetchPmi,
-  fetchVix,
-} from "@/lib/macro/fred";
+import { fetchEurUsd, fetchOil, fetchVix } from "@/lib/macro/fred";
 import { fetchRegionContext } from "@/lib/macro/regions";
+import { fetchGold } from "@/lib/macro/yahoo";
 
 function fulfilledValues<T>(results: PromiseSettledResult<T>[]): T[] {
   return results.flatMap((result) =>
@@ -32,10 +27,9 @@ function withFirstFailureReason<T>(message: string, results: PromiseSettledResul
 }
 
 export async function getMacroData(): Promise<MacroData> {
-  const [marketsTodayResults, regionResults, macroContextResults] = await Promise.all([
+  const [marketsTodayResults, regionResults] = await Promise.all([
     Promise.allSettled([fetchVix(), fetchEurUsd(), fetchOil(), fetchGold()]),
     Promise.allSettled(REGION_SERIES_CONFIGS.map((config) => fetchRegionContext(config))),
-    Promise.allSettled([fetchPmi()]),
   ]);
 
   const marketsToday = fulfilledValues(marketsTodayResults);
@@ -52,15 +46,7 @@ export async function getMacroData(): Promise<MacroData> {
     );
   }
 
-  const macroEnvironment = [
-    ...regions.flatMap((region) => [region.inflation, region.policyRate]),
-    ...fulfilledValues(macroContextResults),
-  ];
-
-  const hadFailures =
-    hasAnyFailure(marketsTodayResults)
-    || hasAnyFailure(regionResults)
-    || hasAnyFailure(macroContextResults);
+  const hadFailures = hasAnyFailure(marketsTodayResults) || hasAnyFailure(regionResults);
 
   const sources = new Set<string>(["FRED"]);
   const usesBls = regions.some((region) =>
@@ -71,6 +57,10 @@ export async function getMacroData(): Promise<MacroData> {
       region.policyRate.label.includes("CBR")
       || region.inflation.label.includes("CBR"),
   );
+
+  if (marketsToday.some((indicator) => indicator.id === "gold")) {
+    sources.add("Yahoo");
+  }
 
   if (usesBls) {
     sources.add("BLS");
@@ -87,8 +77,6 @@ export async function getMacroData(): Promise<MacroData> {
   return {
     marketsToday,
     regions,
-    macroEnvironment,
-    indicators: [...marketsToday, ...macroEnvironment],
     updatedAt: new Date().toISOString(),
     sources: Array.from(sources),
   };

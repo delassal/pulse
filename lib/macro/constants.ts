@@ -3,12 +3,13 @@
 export const FRED_VIX_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=VIXCLS";
 export const FRED_EURUSD_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DEXUSEU";
 export const FRED_OIL_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILWTICO";
-export const FRED_GOLD_URL =
-  "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GOLDAMGBD228NLBM";
-export const FRED_PMI_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=NAPM";
 export const FRED_FEDFUNDS_URL =
   "https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS";
 export const BLS_US_CPI_URL = "https://api.bls.gov/publicAPI/v2/timeseries/data/";
+
+// FRED dropped the LBMA gold fix, so gold comes from Yahoo Finance (COMEX front-month futures).
+export const YAHOO_GOLD_URL =
+  "https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=10y";
 
 export const FRED_INFLATION_EU_URL =
   "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP0000EZ19M086NEST";

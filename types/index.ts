@@ -44,9 +44,7 @@ export interface MacroRegionContext {
 
 export interface MacroData {
   marketsToday: MacroIndicator[];
-  macroEnvironment: MacroIndicator[];
   regions: MacroRegionContext[];
-  indicators: MacroIndicator[];
   updatedAt: string;
   sources: string[];
 }
