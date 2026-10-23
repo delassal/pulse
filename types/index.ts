@@ -81,6 +81,8 @@ export interface GymUsagePoint {
   percentage: number;
   level: GymUsageLevel;
   isCurrent: boolean;
+  /** Slot lies later today: the percentage is Fitness First's forecast, not a measurement. */
+  isFuture: boolean;
 }
 
 export interface GymUsageData {

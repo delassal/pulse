@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Flag } from "@/components/travel/Flag";
+import { Flag } from "@/components/ui/Flag";
 import { Card } from "@/components/ui/Card";
 import { TravelIcon } from "@/components/ui/Icons";
 import { TRAVEL_VIEWS } from "@/lib/travel-meta";
@@ -20,7 +20,7 @@ export function TravelWidget() {
           <ul className="flex items-center gap-2" aria-label="Sources">
             {TRAVEL_VIEWS.map((view) => (
               <li key={view.id} title={view.label}>
-                <Flag source={view.id} className="h-3.5 w-[18px]" />
+                <Flag code={view.id} className="h-3.5 w-[18px]" />
               </li>
             ))}
           </ul>

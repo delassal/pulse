@@ -26,6 +26,16 @@ const LEVEL_LABEL: Record<GymUsageLevel, string> = {
   HIGH: "High",
 };
 
+// Past slots are muted, the current slot is solid, and the rest of today is
+// Fitness First's forecast, drawn in a lighter accent so it reads as an estimate.
+const BAR_STYLE = {
+  past: { fill: "var(--subtle)", fillOpacity: 1 },
+  current: { fill: "var(--accent)", fillOpacity: 1 },
+  forecast: { fill: "var(--accent)", fillOpacity: 0.35 },
+} as const;
+
+type BarKind = keyof typeof BAR_STYLE;
+
 function formatGymTooltipLabel(value: string) {
   const [hours, minutes] = value.split(":");
   return `${hours}:${minutes}`;
@@ -39,6 +49,7 @@ function renderGymTooltip() {
     }
 
     const value = payload[0]?.value;
+    const kind = (payload[0]?.payload as { kind?: BarKind } | undefined)?.kind;
 
     if (typeof value !== "number") {
       return null;
@@ -48,6 +59,7 @@ function renderGymTooltip() {
       <div className="theme-tooltip rounded-xl px-3 py-2">
         <p className="theme-muted text-xs font-medium">
           {formatGymTooltipLabel(String(label ?? ""))}
+          {kind === "forecast" ? " · Forecast" : kind === "current" ? " · Now" : null}
         </p>
         <p className="theme-text mt-1 text-sm font-semibold">
           {Math.round(value)}%
@@ -131,8 +143,9 @@ export function GymWidget() {
     label: point.startTime.slice(0, 5),
     endLabel: point.endTime.slice(0, 5),
     percentage: point.percentage,
-    isCurrent: point.isCurrent,
+    kind: (point.isCurrent ? "current" : point.isFuture ? "forecast" : "past") as BarKind,
   }));
+  const hasForecast = chartData.some((entry) => entry.kind === "forecast");
 
   const lastChartLabel = chartData[chartData.length - 1]?.label;
   const chartClosingLabel = chartData[chartData.length - 1]?.endLabel;
@@ -184,13 +197,28 @@ export function GymWidget() {
                 {chartData.map((entry) => (
                   <Cell
                     key={entry.label}
-                    fill={entry.isCurrent ? "var(--accent)" : "var(--subtle)"}
+                    fill={BAR_STYLE[entry.kind].fill}
+                    fillOpacity={BAR_STYLE[entry.kind].fillOpacity}
                   />
                 ))}
               </Bar>
             </BarChart>
           ) : null}
         </div>
+        {hasForecast ? (
+          <ul className="theme-muted flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+            {(["past", "current", "forecast"] as const).map((kind) => (
+              <li key={kind} className="flex items-center gap-1.5">
+                <span
+                  aria-hidden
+                  className="inline-block h-2.5 w-2.5 rounded-[3px]"
+                  style={{ background: BAR_STYLE[kind].fill, opacity: BAR_STYLE[kind].fillOpacity }}
+                />
+                {kind === "past" ? "Earlier today" : kind === "current" ? "Now" : "Forecast"}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
     </Card>
   );

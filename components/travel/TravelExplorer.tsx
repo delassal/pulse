@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Flag } from "@/components/travel/Flag";
+import { Flag } from "@/components/ui/Flag";
 import { TravelMap } from "@/components/travel/TravelMap";
 import {
   LEGENDS,
@@ -72,7 +72,7 @@ function CountryPopup({ country, onClose }: { country: TravelCountry; onClose: (
               className="flex items-start gap-2.5 py-2"
               style={{ borderColor: "var(--border)" }}
             >
-              <Flag source={id} className="mt-0.5 h-3 w-4" />
+              <Flag code={id} className="mt-0.5 h-3 w-4" />
               <div className="min-w-0 flex-1">
                 <p className="flex items-start gap-1.5 text-[13px] font-medium leading-snug">
                   <span className="mt-[3px]">
@@ -212,7 +212,7 @@ export function TravelExplorer() {
                   view === option.id ? "theme-toggle-option-active" : ""
                 }`}
               >
-                <Flag source={option.id} className="h-3.5 w-[18px]" />
+                <Flag code={option.id} className="h-3.5 w-[18px]" />
                 <span className="sm:hidden">{option.short}</span>
                 <span className="hidden sm:inline">{option.label}</span>
               </button>
@@ -310,7 +310,7 @@ export function TravelExplorer() {
                   <span className="min-w-0 flex-1 truncate">{country.name}</span>
                   {SOURCE_ORDER.map((id) => (
                     <span key={id} className="flex items-center gap-1">
-                      <Flag source={id} />
+                      <Flag code={id} />
                       <Swatch severity={country.advisories[id]?.severity ?? 0} />
                     </span>
                   ))}

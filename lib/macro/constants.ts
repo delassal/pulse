@@ -38,7 +38,8 @@ export const CBR_INFLATION_URL =
 
 export const FETCH_START_DATE = "2019-01-01";
 export const DISPLAY_START_DATE = "2020-01-01";
-export const MARKET_HISTORY_POINTS = 40;
+// Daily market series: ~5 years of trading days, enough for the widget's longest (5Y) range.
+export const MARKET_HISTORY_POINTS = 1320;
 export const MACRO_HISTORY_POINTS = 3000;
 
 export type RegionId = "eu" | "uk" | "us" | "russia" | "china";

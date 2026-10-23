@@ -70,6 +70,7 @@ export async function getGymUsageData(): Promise<GymUsageData> {
       percentage: item.percentage,
       level: item.level,
       isCurrent: item.isCurrent,
+      isFuture: item.isFuture,
     })),
     updatedAt: new Date().toISOString(),
   };

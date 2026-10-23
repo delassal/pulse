@@ -2,7 +2,29 @@ import { useId, type ReactNode } from "react";
 import type { TravelSourceId } from "@/types";
 
 // Flag artwork from flag-icons 7.2.3 (MIT, https://github.com/lipis/flag-icons), 4:3 ratio.
-// Inlined instead of adding the package, since only four flags are needed.
+// Inlined instead of adding the package, since only a handful of flags are needed.
+// The EU and China stars are flattened from the original <use> references so no ids are needed.
+
+export type FlagCode = TravelSourceId | "eu" | "ru" | "cn";
+
+// Five-pointed unit star (outer radius 1), shared by the EU and China flags.
+const STAR_PATH = "M-.6.8 0-1 .6.8-1-.3h2z";
+
+// Twelve upright stars on a circle of radius 6 units around the flag centre.
+const EU_STAR_TRANSFORMS = Array.from({ length: 12 }, (_, index) => {
+  const angle = (index * Math.PI) / 6;
+  const x = 320 + 6 * 23.7037 * Math.sin(angle);
+  const y = 242.3 - 6 * 23.7037 * Math.cos(angle);
+  return `translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(23.7037)`;
+});
+
+const CN_STAR_TRANSFORMS = [
+  "matrix(71.9991 0 0 72 120 120)",
+  "matrix(-12.33562 -20.5871 20.58684 -12.33577 240.3 48)",
+  "matrix(-3.38573 -23.75998 23.75968 -3.38578 288 95.8)",
+  "matrix(6.5991 -23.0749 23.0746 6.59919 288 168)",
+  "matrix(14.9991 -18.73557 18.73533 14.99929 240 216)",
+];
 
 function UsFlag({ markerId }: { markerId: string }) {
   return (
@@ -26,7 +48,30 @@ function UsFlag({ markerId }: { markerId: string }) {
   );
 }
 
-const FLAGS: Record<Exclude<TravelSourceId, "us">, ReactNode> = {
+const FLAGS: Record<Exclude<FlagCode, "us">, ReactNode> = {
+  eu: (
+    <>
+      <path fill="#039" d="M0 0h640v480H0z" />
+      {EU_STAR_TRANSFORMS.map((transform) => (
+        <path key={transform} fill="#fc0" transform={transform} d={STAR_PATH} />
+      ))}
+    </>
+  ),
+  ru: (
+    <>
+      <path fill="#fff" d="M0 0h640v160H0z" />
+      <path fill="#0039a6" d="M0 160h640v160H0z" />
+      <path fill="#d52b1e" d="M0 320h640v160H0z" />
+    </>
+  ),
+  cn: (
+    <>
+      <path fill="#ee1c25" d="M0 0h640v480H0z" />
+      {CN_STAR_TRANSFORMS.map((transform) => (
+        <path key={transform} fill="#ff0" transform={transform} d={STAR_PATH} />
+      ))}
+    </>
+  ),
   de: (
     <>
       <path fill="#fc0" d="M0 320h640v160H0z" />
@@ -60,7 +105,7 @@ const FLAGS: Record<Exclude<TravelSourceId, "us">, ReactNode> = {
   ),
 };
 
-export function Flag({ source, className }: { source: TravelSourceId; className?: string }) {
+export function Flag({ code, className }: { code: FlagCode; className?: string }) {
   const markerId = `flag-us-star${useId()}`;
 
   return (
@@ -69,7 +114,7 @@ export function Flag({ source, className }: { source: TravelSourceId; className?
       aria-hidden
       className={`inline-block flex-none overflow-hidden rounded-[3px] shadow-[0_0_0_1px_var(--border)] ${className ?? "h-3 w-4"}`}
     >
-      {source === "us" ? <UsFlag markerId={markerId} /> : FLAGS[source]}
+      {code === "us" ? <UsFlag markerId={markerId} /> : FLAGS[code]}
     </svg>
   );
 }
