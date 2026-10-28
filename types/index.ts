@@ -153,3 +153,64 @@ export interface TravelAdvisoryData {
   sources: TravelSourceStatus[];
   updatedAt: string;
 }
+
+export type FlightRegion =
+  | "Europe"
+  | "Asia"
+  | "Africa"
+  | "Middle East"
+  | "Americas"
+  | "Oceania";
+
+/** One cached fare as reported by the Travelpayouts (Aviasales) Data API. */
+export interface FlightFare {
+  price: number;
+  departureAt: string;
+  returnAt: string | null;
+  airline: string;
+  transfers: number;
+  returnTransfers: number | null;
+  /** Total travel time in minutes (outbound + return for round trips). */
+  duration: number | null;
+  /** Absolute Aviasales search URL for this fare. */
+  link: string;
+}
+
+export interface FlightMonthFares {
+  oneWay?: FlightFare;
+  roundTrip?: FlightFare;
+}
+
+export interface FlightDestination {
+  code: string;
+  name: string;
+  country: string;
+  countryCode: string;
+  region: FlightRegion;
+  /** Keyed by departure month, YYYY-MM. */
+  months: Record<string, FlightMonthFares>;
+}
+
+export interface FlightSnapshot {
+  origin: string;
+  currency: "EUR";
+  crawledAt: string;
+  months: string[];
+  requests: number;
+  failedRequests: number;
+  destinations: Record<string, FlightDestination>;
+}
+
+/** Cheapest fare per destination over the whole 12-month window, one row per crawl day. */
+export interface FlightHistory {
+  days: string[];
+  /** [oneWay, roundTrip] per day, aligned with `days`; null when no fare was cached. */
+  series: Record<string, Array<[number | null, number | null]>>;
+}
+
+export interface FlightData {
+  snapshot: FlightSnapshot | null;
+  history: FlightHistory | null;
+  /** Set when the crawler has not produced data yet (e.g. missing configuration). */
+  notice?: string;
+}
