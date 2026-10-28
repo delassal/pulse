@@ -4,6 +4,7 @@ import { GymWidget } from "@/components/widgets/GymWidget";
 import { MacroWidget } from "@/components/widgets/MacroWidget";
 import { PoolWidget } from "@/components/widgets/PoolWidget";
 import { TravelWidget } from "@/components/widgets/TravelWidget";
+import { FlightsWidget } from "@/components/widgets/FlightsWidget";
 import { DailyBriefingWidget } from "@/components/widgets/DailyBriefingWidget";
 import { FinancialsIcon, MacroIcon, PersonalIcon } from "@/components/ui/Icons";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
@@ -78,6 +79,7 @@ export default function DashboardPage() {
             <PoolWidget />
             <GymWidget />
             <TravelWidget />
+            <FlightsWidget />
           </div>
         </section>
 

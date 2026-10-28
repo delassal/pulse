@@ -8,6 +8,7 @@ Pulse is a mobile-first personal morning-briefing dashboard MVP. It surfaces a q
 - M-Bäder pool occupancy (Munich)
 - Fitness First gym occupancy (club 2405764950, München Moosach)
 - Travel advisories world map (`/travel`): Germany, US, Canada and UK side by side
+- Flights from Munich (`/flights`): cheapest cached fare to every destination for the next 12 months, crawled daily
 
 Built with:
 
@@ -18,7 +19,7 @@ Built with:
 - TanStack Query v5
 - Recharts v3
 
-No environment variables or API keys are required — all upstream data sources are public.
+All dashboard data sources are public. Only the flight crawler needs configuration (see below).
 
 ## Run Locally
 
@@ -105,6 +106,7 @@ See [CLAUDE.md](CLAUDE.md) for the authoritative architecture, caching, and them
 - News: BBC World News RSS feed
 - Pool: SWM + ticos-systems visitor-count APIs (M-Bäder)
 - Gym: Fitness First usage API (club week endpoint)
+- Flights: Travelpayouts (Aviasales) Data API, `prices_for_dates` with `unique=true` (one cheapest fare per destination and month)
 - Travel: Auswärtiges Amt Open Data, US State Department advisory RSS, Global Affairs Canada open data, UK FCDO travel advice (GOV.UK Content API)
 
 ## Notes
@@ -120,4 +122,21 @@ See [CLAUDE.md](CLAUDE.md) for the authoritative architecture, caching, and them
 3. Build command: `npm run build`
 4. Output: default Next.js output
 
-No extra environment variables are required for the current MVP data sources.
+### Flight crawler setup
+
+The crawler (`/api/flights/crawl`) runs daily at 05:00 UTC via Vercel Cron (`vercel.json`). Each run makes 24 requests (12 months x one-way/round trip) and stores the result in a private Vercel Blob store:
+
+- `flights/latest.json`: newest snapshot, read by `/flights`
+- `flights/history.json`: cheapest fare per destination per day (last 400 days)
+- `flights/snapshots/YYYY-MM-DD.json`: daily archive
+
+Environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `TRAVELPAYOUTS_TOKEN` | API token from travelpayouts.com (Profile, API token) |
+| `CRON_SECRET` | Random string; Vercel Cron sends it as Bearer token |
+| `BLOB_READ_WRITE_TOKEN` | Set automatically when a Blob store is connected to the project |
+| `FLIGHTS_MARKET` | Optional Aviasales market, default `de` |
+
+Trigger a run manually: `curl -H "Authorization: Bearer $CRON_SECRET" https://<domain>/api/flights/crawl`
