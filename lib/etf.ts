@@ -37,20 +37,91 @@ export const ETF_CONFIGS: EtfConfig[] = [
   },
 ];
 
-function getYahooChartUrl(symbol: string, range: "1y" | "max") {
+type YahooRange = "10y" | "max";
+
+// Yahoo coarsens `range=max` to monthly bars no matter which interval is requested,
+// so daily figures (day change, recent closes, calendar years) come from the 10y range.
+function getYahooChartUrl(symbol: string, range: YahooRange) {
   return `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=${range}&includePrePost=false&events=div%2Csplits`;
 }
 
-function startOfYearIso(date = new Date()): string {
-  return new Date(Date.UTC(date.getUTCFullYear(), 0, 1)).toISOString().slice(0, 10);
+const RECENT_CLOSES = 6;
+const CALENDAR_YEARS = 5;
+
+interface YahooChartPayload {
+  chart?: {
+    result?: Array<{
+      meta?: {
+        currency?: string;
+        symbol?: string;
+        longName?: string;
+        shortName?: string;
+        regularMarketPrice?: number;
+        regularMarketTime?: number;
+        exchangeTimezoneName?: string;
+      };
+      timestamp?: number[];
+      indicators?: {
+        quote?: Array<{
+          close?: Array<number | null>;
+        }>;
+      };
+    }>;
+  };
 }
 
-function formatAsOf(timestamp?: number): string {
-  if (!timestamp) {
-    return new Date().toISOString();
+interface CloseRow {
+  date: string;
+  close: number;
+}
+
+/** Calendar date (YYYY-MM-DD) of a timestamp at the exchange, not in UTC. */
+function exchangeDateFormatter(timeZone?: string) {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timeZone || "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    return (timestamp: number) => formatter.format(new Date(timestamp * 1000));
+  } catch {
+    return (timestamp: number) => new Date(timestamp * 1000).toISOString().slice(0, 10);
+  }
+}
+
+function toCloseRows(payload: YahooChartPayload) {
+  const result = payload.chart?.result?.[0];
+  const meta = result?.meta;
+  const timestamps = result?.timestamp ?? [];
+  const closes = result?.indicators?.quote?.[0]?.close ?? [];
+  const toDate = exchangeDateFormatter(meta?.exchangeTimezoneName);
+
+  const rows: CloseRow[] = [];
+  timestamps.forEach((timestamp, index) => {
+    const close = toNumber(closes[index]);
+    if (close !== null) rows.push({ date: toDate(timestamp), close });
+  });
+
+  // The newest bar often arrives without a close; the quote in `meta` is the price for it.
+  if (meta?.regularMarketPrice && meta.regularMarketTime) {
+    const marketDate = toDate(meta.regularMarketTime);
+    const last = rows[rows.length - 1];
+    if (!last || marketDate > last.date) {
+      rows.push({ date: marketDate, close: meta.regularMarketPrice });
+    } else if (marketDate === last.date) {
+      last.close = meta.regularMarketPrice;
+    }
   }
 
-  return new Date(timestamp * 1000).toISOString();
+  return { rows, meta };
+}
+
+/** Last close of each calendar year, keyed by year. */
+function yearEndCloses(rows: CloseRow[]) {
+  const byYear = new Map<number, number>();
+  for (const row of rows) byYear.set(Number(row.date.slice(0, 4)), row.close);
+  return byYear;
 }
 
 function getEtfConfig(identifier: string): EtfConfig {
@@ -73,79 +144,57 @@ export async function getEtfData(identifier: string): Promise<EtfData> {
     accept: "application/json",
   };
 
-  const [fullResponse, ytdResponse] = await Promise.all([
+  const [monthlyResponse, dailyResponse] = await Promise.all([
     fetch(getYahooChartUrl(config.symbol, "max"), { cache: "no-store", headers }),
-    fetch(getYahooChartUrl(config.symbol, "1y"), { cache: "no-store", headers }),
+    fetch(getYahooChartUrl(config.symbol, "10y"), { cache: "no-store", headers }),
   ]);
 
-  if (!fullResponse.ok || !ytdResponse.ok) {
+  if (!monthlyResponse.ok || !dailyResponse.ok) {
     throw new Error("Unable to fetch ETF data");
   }
 
-  const [fullPayload, ytdPayload] = (await Promise.all([
-    fullResponse.json(),
-    ytdResponse.json(),
-  ])) as Array<{
-    chart?: {
-      result?: Array<{
-        meta?: {
-          currency?: string;
-          symbol?: string;
-          longName?: string;
-          shortName?: string;
-          regularMarketPrice?: number;
-          regularMarketTime?: number;
-          chartPreviousClose?: number;
-        };
-        timestamp?: number[];
-        indicators?: {
-          quote?: Array<{
-            close?: Array<number | null>;
-          }>;
-        };
-      }>;
-    };
-  }>;
+  const [monthlyPayload, dailyPayload] = (await Promise.all([
+    monthlyResponse.json(),
+    dailyResponse.json(),
+  ])) as YahooChartPayload[];
 
-  const toHistoryRows = (payload: typeof fullPayload) => {
-    const result = payload.chart?.result?.[0];
-    const timestamps = result?.timestamp ?? [];
-    const closes = result?.indicators?.quote?.[0]?.close ?? [];
+  const { rows: monthlyRows, meta: monthlyMeta } = toCloseRows(monthlyPayload);
+  const { rows: dailyRows, meta: dailyMeta } = toCloseRows(dailyPayload);
+  const meta = dailyMeta ?? monthlyMeta;
 
-    const historyRows = timestamps
-      .map((timestamp, index) => {
-        const close = toNumber(closes[index]);
-        if (close === null) {
-          return null;
-        }
-
-        return {
-          date: new Date(timestamp * 1000).toISOString().slice(0, 10),
-          close,
-        };
-      })
-      .filter((point): point is { date: string; close: number } => point !== null);
-
-    return { historyRows, meta: result?.meta };
-  };
-
-  const { historyRows: fullHistoryRows, meta: fullMeta } = toHistoryRows(fullPayload);
-  const { historyRows: ytdHistoryRows, meta: ytdMeta } = toHistoryRows(ytdPayload);
-  const meta = fullMeta ?? ytdMeta;
-
-  if (fullHistoryRows.length < 2 || !meta) {
+  if (dailyRows.length < 2 || monthlyRows.length < 2 || !meta) {
     throw new Error(`Insufficient ETF history for ${config.symbol}`);
   }
 
-  const asOf = formatAsOf(meta.regularMarketTime);
-  const yearStart = startOfYearIso();
-  const ytdHistory = ytdHistoryRows.filter((point) => point.date >= yearStart);
-  const chartHistory = ytdHistory.length >= 2 ? ytdHistory : fullHistoryRows;
-  const firstYtdPoint = chartHistory[0];
-  const latest = fullHistoryRows[fullHistoryRows.length - 1];
-  const previous = fullHistoryRows[fullHistoryRows.length - 2];
+  const latest = dailyRows[dailyRows.length - 1];
+  const previous = dailyRows[dailyRows.length - 2];
   const dailyChangePct = calcPctChange(latest.close, previous.close);
-  const ytdChangePct = calcPctChange(latest.close, firstYtdPoint.close);
+
+  // YTD is measured from the last close of the previous year, so that row leads the chart.
+  const currentYear = Number(latest.date.slice(0, 4));
+  const firstOfYear = dailyRows.findIndex((row) => Number(row.date.slice(0, 4)) === currentYear);
+  const ytdRows = dailyRows.slice(Math.max(0, firstOfYear - 1));
+  const ytdChangePct = calcPctChange(latest.close, ytdRows[0].close);
+
+  const recentCloses = dailyRows
+    .slice(-(RECENT_CLOSES + 1))
+    .map((row, index, rows) =>
+      index === 0
+        ? null
+        : { date: row.date, price: row.close, changePct: calcPctChange(row.close, rows[index - 1].close) },
+    )
+    .filter((row): row is NonNullable<typeof row> => row !== null)
+    .reverse();
+
+  const yearEnds = yearEndCloses(dailyRows);
+  const yearlyPerformance: EtfData["yearlyPerformance"] = [];
+  for (let year = currentYear - CALENDAR_YEARS; year < currentYear; year += 1) {
+    const end = yearEnds.get(year);
+    const start = yearEnds.get(year - 1);
+    if (end !== undefined && start !== undefined) {
+      yearlyPerformance.push({ year, changePct: calcPctChange(end, start) });
+    }
+  }
 
   const trend: EtfData["trend"] =
     dailyChangePct > 0 ? "up" : dailyChangePct < 0 ? "down" : "flat";
@@ -158,19 +207,13 @@ export async function getEtfData(identifier: string): Promise<EtfData> {
     dailyChangePct,
     ytdChangePct,
     trend,
-    history: chartHistory.map((point) => ({
-      date: point.date,
-      price: point.close,
-    })),
-    fullHistory: fullHistoryRows.map((point) => ({
-      date: point.date,
-      price: point.close,
-    })),
-    asOf,
+    history: ytdRows.map((row) => ({ date: row.date, price: row.close })),
+    fullHistory: monthlyRows.map((row) => ({ date: row.date, price: row.close })),
+    recentCloses,
+    yearlyPerformance,
+    asOf: meta.regularMarketTime
+      ? new Date(meta.regularMarketTime * 1000).toISOString()
+      : new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-}
-
-export function resolveEtfFromIdentifier(identifier: string): EtfConfig {
-  return getEtfConfig(identifier);
 }

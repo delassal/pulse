@@ -2,8 +2,16 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Line, LineChart, ResponsiveContainer, Tooltip, YAxis } from "recharts";
-import { cheapestFares } from "@/lib/flight-utils";
+import { Line, LineChart, Tooltip, YAxis } from "recharts";
+import { useChartSize } from "@/components/ui/useChartSize";
+import {
+  FLIGHT_STAYS,
+  cheapestFare,
+  fareFor,
+  stayNights,
+  type FareMatch,
+  type FlightTrip,
+} from "@/lib/flight-utils";
 import type {
   ApiError,
   FlightData,
@@ -11,9 +19,9 @@ import type {
   FlightFare,
   FlightHistory,
   FlightRegion,
+  FlightStay,
 } from "@/types";
 
-type TripType = "roundTrip" | "oneWay";
 type SortKey = "price" | "drop" | "name";
 
 const REGIONS: Array<FlightRegion | "All"> = [
@@ -25,9 +33,12 @@ const REGIONS: Array<FlightRegion | "All"> = [
   "Americas",
   "Oceania",
 ];
-const PRICE_CAPS = [0, 150, 300, 600, 900, 1200];
 const PAGE_SIZE = 40;
 const TREND_DAYS = 7;
+
+// Price bands in steps of 100: up to 100, 100 to 200, ... and one open band at the top.
+const PRICE_STEP = 100;
+const PRICE_BANDS = 15;
 
 async function fetchFlights(): Promise<FlightData> {
   const response = await fetch("/api/flights");
@@ -44,13 +55,30 @@ const euro = new Intl.NumberFormat("de-DE", {
   maximumFractionDigits: 0,
 });
 
-function monthLabel(month: string, withYear = true) {
+/** Band 0 is up to 100, band 1 is above 100 up to 200, ..., band PRICE_BANDS is everything above. */
+function priceBand(price: number) {
+  return Math.min(PRICE_BANDS, Math.max(0, Math.ceil(price / PRICE_STEP) - 1));
+}
+
+function priceBandLabel(band: number) {
+  if (band === 0) return `Up to ${euro.format(PRICE_STEP)}`;
+  if (band === PRICE_BANDS) return `Over ${euro.format(PRICE_BANDS * PRICE_STEP)}`;
+  return `${(band * PRICE_STEP).toLocaleString("de-DE")} – ${euro.format((band + 1) * PRICE_STEP)}`;
+}
+
+function monthName(month: string, format: "short" | "long" | "narrow" = "short") {
   const [year, mon] = month.split("-").map(Number);
-  const name = new Date(Date.UTC(year, mon - 1, 1)).toLocaleString("en-GB", {
-    month: "short",
+  return new Date(Date.UTC(year, mon - 1, 1)).toLocaleString("en-GB", {
+    month: format,
     timeZone: "UTC",
   });
-  return withYear ? `${name} ’${String(year).slice(2)}` : name;
+}
+
+function monthLabel(month: string, format: "short" | "long" = "short") {
+  const year = month.slice(0, 4);
+  return format === "long"
+    ? `${monthName(month, "long")} ${year}`
+    : `${monthName(month)} ’${year.slice(2)}`;
 }
 
 /** "2026-11-18T10:25:00+01:00" → "18 Nov", without converting time zones. */
@@ -81,72 +109,163 @@ function stopsLabel(stops: number) {
   return stops === 1 ? "1 stop" : `${stops} stops`;
 }
 
+function nightsLabel(fare: FlightFare) {
+  const nights = stayNights(fare.departureAt, fare.returnAt);
+  if (nights === null) return null;
+  if (nights === 0) return "same day";
+  return nights === 1 ? "1 night" : `${nights} nights`;
+}
+
+/** The same dates on other search sites, to cross-check the cached price before booking. */
+function compareLinks(destination: FlightDestination, fare: FlightFare) {
+  const depart = fare.departureAt.slice(0, 10);
+  const back = fare.returnAt?.slice(0, 10);
+
+  const trip = new URLSearchParams({
+    dcity: "muc",
+    acity: destination.code.toLowerCase(),
+    ddate: depart,
+    ...(back ? { rdate: back } : {}),
+    triptype: back ? "rt" : "ow",
+    class: "y",
+    quantity: "1",
+    locale: "en-XX",
+    curr: "EUR",
+  });
+
+  const google = new URLSearchParams({
+    q: `Flights from Munich to ${destination.name} on ${depart}${back ? ` through ${back}` : " one way"}`,
+    curr: "EUR",
+  });
+
+  return [
+    { label: "Trip.com", href: `https://www.trip.com/flights/showfarefirst?${trip}` },
+    { label: "Google Flights", href: `https://www.google.com/travel/flights?${google}` },
+  ];
+}
+
+interface Filters {
+  trip: FlightTrip;
+  /** Departure month (YYYY-MM), or null for the whole window. */
+  month: string | null;
+  /** Length of stay, round trips only. */
+  stay: FlightStay | null;
+}
+
 interface Row {
   destination: FlightDestination;
-  best: { fare: FlightFare; month: string } | null;
-  /** Price change versus TREND_DAYS ago (negative = cheaper now). */
+  best: FareMatch;
+  /** Price change versus TREND_DAYS ago (negative = cheaper now); only without month or stay filter. */
   change: number | null;
   lowestTracked: boolean;
   history: number[];
 }
 
-function historyFor(history: FlightHistory | null, code: string, trip: TripType) {
+function historyFor(history: FlightHistory | null, code: string, trip: FlightTrip) {
   const row = history?.series[code];
   if (!row) return [];
   const index = trip === "oneWay" ? 0 : 1;
   return row.map((point) => point[index]).filter((value): value is number => value !== null);
 }
 
-function buildRows(data: FlightData, trip: TripType): Row[] {
-  const destinations = Object.values(data.snapshot?.destinations ?? {});
-  return destinations.map((destination) => {
-    const best = cheapestFares(destination)[trip];
+function buildRows(data: FlightData, { trip, month, stay }: Filters): Row[] {
+  // The daily history tracks the cheapest fare over all months and lengths of stay.
+  const comparable = !month && !stay;
+  const rows: Row[] = [];
+
+  for (const destination of Object.values(data.snapshot?.destinations ?? {})) {
+    const best = cheapestFare(destination, trip, { month, stay });
+    if (!best) continue;
+
     const history = historyFor(data.history, destination.code, trip);
     const previous = history.length > TREND_DAYS ? history[history.length - 1 - TREND_DAYS] : null;
-    const change = best && previous ? best.fare.price - previous : null;
-    const lowestTracked =
-      best !== null && history.length >= TREND_DAYS && best.fare.price <= Math.min(...history);
-    return { destination, best, change, lowestTracked, history };
-  });
+    rows.push({
+      destination,
+      best,
+      history,
+      change: comparable && previous ? best.fare.price - previous : null,
+      lowestTracked:
+        comparable && history.length >= TREND_DAYS && best.fare.price <= Math.min(...history),
+    });
+  }
+
+  return rows;
 }
 
 function MonthStrip({
   destination,
   months,
-  trip,
+  filters,
+  bestMonth,
 }: {
   destination: FlightDestination;
   months: string[];
-  trip: TripType;
+  filters: Filters;
+  bestMonth: string;
 }) {
-  const prices = months.map((month) => destination.months[month]?.[trip]?.price ?? null);
+  const prices = months.map(
+    (month) => fareFor(destination.months[month], filters.trip, filters.stay)?.price ?? null,
+  );
   const known = prices.filter((price): price is number => price !== null);
   const min = Math.min(...known);
   const max = Math.max(...known);
 
   return (
-    <div className="grid grid-cols-12 gap-[3px]" aria-hidden>
-      {prices.map((price, index) => {
+    <div
+      className="grid gap-[3px]"
+      style={{ gridTemplateColumns: `repeat(${months.length}, minmax(0, 1fr))` }}
+      aria-hidden
+    >
+      {months.map((month, index) => {
+        const price = prices[index];
         const share = price === null || max === min ? 0 : (price - min) / (max - min);
+        const isBest = month === bestMonth;
+        const dimmed = filters.month !== null && filters.month !== month;
         return (
-          <span
-            key={months[index]}
-            title={price === null ? `${monthLabel(months[index])}: no fare` : `${monthLabel(months[index])}: ${euro.format(price)}`}
-            className="h-2.5 rounded-[3px]"
-            style={{
-              background:
-                price === null
-                  ? "var(--sev-none)"
-                  : `color-mix(in srgb, var(--sev-3) ${Math.round(share * 100)}%, var(--sev-1))`,
-            }}
-          />
+          <div
+            key={month}
+            title={`${monthLabel(month, "long")}: ${price === null ? "no fare" : euro.format(price)}`}
+            className={`min-w-0 ${dimmed ? "opacity-35" : ""} ${
+              // A hairline where the year turns.
+              month.endsWith("-01") && index > 0 ? "border-l border-[color:var(--muted)] pl-[3px]" : ""
+            }`}
+          >
+            <span
+              className="block h-2.5 rounded-[3px]"
+              style={{
+                background:
+                  price === null
+                    ? "var(--sev-none)"
+                    : `color-mix(in srgb, var(--sev-3) ${Math.round(share * 100)}%, var(--sev-1))`,
+                boxShadow: isBest ? "0 0 0 1.5px var(--foreground)" : undefined,
+              }}
+            />
+            <span
+              className={`mt-1 block text-center text-[9px] leading-none ${
+                isBest ? "theme-text font-bold" : "theme-subtle"
+              }`}
+            >
+              <span className="sm:hidden">{monthName(month, "narrow")}</span>
+              <span className="hidden sm:inline">{monthName(month)}</span>
+            </span>
+          </div>
         );
       })}
     </div>
   );
 }
 
-function FareCard({ month, fare }: { month: string; fare: FlightFare | undefined }) {
+function FareCard({
+  destination,
+  month,
+  fare,
+  highlighted,
+}: {
+  destination: FlightDestination;
+  month: string;
+  fare: FlightFare | undefined;
+  highlighted: boolean;
+}) {
   if (!fare) {
     return (
       <div className="theme-panel rounded-xl p-3 opacity-60">
@@ -156,32 +275,58 @@ function FareCard({ month, fare }: { month: string; fare: FlightFare | undefined
     );
   }
 
-  const outbound = `${dayLabel(fare.departureAt)}${fare.returnAt ? ` → ${dayLabel(fare.returnAt)}` : ""}`;
+  const dates = `${dayLabel(fare.departureAt)}${fare.returnAt ? ` → ${dayLabel(fare.returnAt)}` : ""}`;
   const stops =
     fare.returnTransfers !== null && fare.returnAt
       ? `${stopsLabel(fare.transfers)} / ${stopsLabel(fare.returnTransfers)}`
       : stopsLabel(fare.transfers);
 
   return (
-    <a
-      href={fare.link}
-      target="_blank"
-      rel="noreferrer"
-      className="theme-panel block rounded-xl p-3 transition-colors hover:bg-[color:var(--accent-soft)]"
+    <div
+      // Outline, not ring: .theme-panel sets its own box-shadow, which a ring could not override.
+      className={`theme-panel overflow-hidden rounded-xl ${
+        highlighted ? "outline-2 -outline-offset-1 outline-[color:var(--accent)]" : ""
+      }`}
     >
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="theme-muted text-xs font-semibold uppercase tracking-wide">{monthLabel(month)}</p>
-        <p className="text-base font-semibold">{euro.format(fare.price)}</p>
-      </div>
-      <p className="mt-1 text-sm">{outbound}</p>
-      <p className="theme-subtle mt-0.5 text-xs">
-        {[fare.airline, stops, durationLabel(fare.duration)].filter(Boolean).join(" · ")}
+      <a
+        href={fare.link}
+        target="_blank"
+        rel="noreferrer"
+        className="block p-3 pb-2 transition-colors hover:bg-[color:var(--accent-soft)]"
+      >
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="theme-muted text-xs font-semibold uppercase tracking-wide">{monthLabel(month)}</p>
+          <p className="text-base font-semibold">{euro.format(fare.price)}</p>
+        </div>
+        <p className="mt-1 text-sm">
+          {dates}
+          {fare.returnAt ? <span className="theme-muted"> · {nightsLabel(fare)}</span> : null}
+        </p>
+        <p className="theme-subtle mt-0.5 text-xs">
+          {[fare.airline, stops, durationLabel(fare.duration)].filter(Boolean).join(" · ")}
+        </p>
+      </a>
+      <p className="theme-subtle flex flex-wrap gap-x-2.5 gap-y-1 px-3 pb-2.5 text-[11px]">
+        <span>Same dates on</span>
+        {compareLinks(destination, fare).map((link) => (
+          <a
+            key={link.label}
+            href={link.href}
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-[color:var(--accent)] underline-offset-2 hover:underline"
+          >
+            {link.label}
+          </a>
+        ))}
       </p>
-    </a>
+    </div>
   );
 }
 
 function PriceHistory({ values }: { values: number[] }) {
+  const [chartRef, size] = useChartSize();
+
   if (values.length < 2) {
     return (
       <p className="theme-subtle text-xs">
@@ -191,9 +336,14 @@ function PriceHistory({ values }: { values: number[] }) {
   }
   const data = values.map((price, index) => ({ index, price }));
   return (
-    <div className="h-16 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+    <div ref={chartRef} className="h-16 w-full min-w-0">
+      {size.width > 0 && size.height > 0 ? (
+        <LineChart
+          width={size.width}
+          height={size.height}
+          data={data}
+          margin={{ top: 4, right: 4, bottom: 4, left: 4 }}
+        >
           <YAxis hide domain={["dataMin - 20", "dataMax + 20"]} />
           <Tooltip
             cursor={false}
@@ -215,7 +365,7 @@ function PriceHistory({ values }: { values: number[] }) {
             isAnimationActive={false}
           />
         </LineChart>
-      </ResponsiveContainer>
+      ) : null}
     </div>
   );
 }
@@ -223,17 +373,18 @@ function PriceHistory({ values }: { values: number[] }) {
 function DestinationRow({
   row,
   months,
-  trip,
+  filters,
   open,
   onToggle,
 }: {
   row: Row;
   months: string[];
-  trip: TripType;
+  filters: Filters;
   open: boolean;
   onToggle: () => void;
 }) {
   const { destination, best, change, lowestTracked } = row;
+  const nights = nightsLabel(best.fare);
 
   return (
     <li className="theme-surface overflow-hidden rounded-2xl">
@@ -254,18 +405,23 @@ function DestinationRow({
             <span className="theme-subtle flex-none text-xs">{destination.code}</span>
           </div>
           <p className="theme-subtle truncate text-xs">{destination.country}</p>
-          <div className="mt-2 max-w-xs">
-            <MonthStrip destination={destination} months={months} trip={trip} />
+          <div className="mt-2 max-w-sm">
+            <MonthStrip
+              destination={destination}
+              months={months}
+              filters={filters}
+              bestMonth={best.month}
+            />
           </div>
         </div>
 
         <div className="flex-none text-right">
-          <p className="text-lg font-semibold leading-tight">{best ? euro.format(best.fare.price) : "n/a"}</p>
-          {best ? (
-            <p className="theme-subtle text-xs">
-              {monthLabel(best.month)} · {stopsLabel(best.fare.transfers)}
-            </p>
-          ) : null}
+          <p className="text-lg font-semibold leading-tight">{euro.format(best.fare.price)}</p>
+          <p className="theme-subtle text-xs">
+            {monthLabel(best.month)}
+            {nights ? ` · ${nights}` : ""}
+          </p>
+          <p className="theme-subtle text-xs">{stopsLabel(best.fare.transfers)}</p>
           <div className="mt-1 flex justify-end gap-1.5">
             {lowestTracked ? (
               <span className="rounded-full bg-[color:var(--accent-soft)] px-2 py-px text-[10px] font-semibold text-[color:var(--accent)]">
@@ -288,11 +444,23 @@ function DestinationRow({
         <div className="border-t px-3.5 pb-4 pt-3 sm:px-4" style={{ borderColor: "var(--border)" }}>
           <p className="theme-muted mb-1 text-xs font-semibold uppercase tracking-wide">
             Cheapest fare, daily
+            {filters.month || filters.stay ? (
+              <span className="theme-subtle font-medium normal-case tracking-normal">
+                {" "}
+                · any month and trip length
+              </span>
+            ) : null}
           </p>
           <PriceHistory values={row.history} />
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="mt-3 grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:grid-cols-3">
             {months.map((month) => (
-              <FareCard key={month} month={month} fare={destination.months[month]?.[trip]} />
+              <FareCard
+                key={month}
+                destination={destination}
+                month={month}
+                fare={fareFor(destination.months[month], filters.trip, filters.stay)}
+                highlighted={month === best.month}
+              />
             ))}
           </div>
         </div>
@@ -309,34 +477,50 @@ export function FlightExplorer() {
     staleTime: 15 * 60_000,
   });
 
-  const [trip, setTrip] = useState<TripType>("roundTrip");
+  const [trip, setTrip] = useState<FlightTrip>("roundTrip");
   const [region, setRegion] = useState<FlightRegion | "All">("All");
   const [query, setQuery] = useState("");
-  const [cap, setCap] = useState(0);
+  const [month, setMonth] = useState<string | null>(null);
+  const [stayChoice, setStayChoice] = useState<FlightStay | null>(null);
+  const [band, setBand] = useState<number | null>(null);
   const [sort, setSort] = useState<SortKey>("price");
   const [openCode, setOpenCode] = useState<string | null>(null);
   const [visible, setVisible] = useState(PAGE_SIZE);
 
-  const allRows = useMemo(() => (data ? buildRows(data, trip) : []), [data, trip]);
+  // A length of stay only exists for round trips; the choice is kept for switching back.
+  const stay = trip === "roundTrip" ? stayChoice : null;
+  const filters = useMemo<Filters>(() => ({ trip, month, stay }), [trip, month, stay]);
 
-  const rows = useMemo(() => {
+  const allRows = useMemo(() => (data ? buildRows(data, filters) : []), [data, filters]);
+
+  // Everything but the price band, so each band can show how many destinations it holds.
+  const matching = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const filtered = allRows.filter(({ destination, best }) => {
-      if (!best) return false;
+    return allRows.filter(({ destination }) => {
       if (region !== "All" && destination.region !== region) return false;
-      if (cap && best.fare.price > cap) return false;
       if (!needle) return true;
       return [destination.name, destination.country, destination.code].some((value) =>
         value.toLowerCase().includes(needle),
       );
     });
+  }, [allRows, region, query]);
+
+  const bandCounts = useMemo(() => {
+    const counts = new Array<number>(PRICE_BANDS + 1).fill(0);
+    for (const row of matching) counts[priceBand(row.best.fare.price)] += 1;
+    return counts;
+  }, [matching]);
+
+  const rows = useMemo(() => {
+    const filtered =
+      band === null ? [...matching] : matching.filter((row) => priceBand(row.best.fare.price) === band);
 
     return filtered.sort((a, b) => {
       if (sort === "name") return a.destination.name.localeCompare(b.destination.name);
       if (sort === "drop") return (a.change ?? 0) - (b.change ?? 0);
-      return (a.best?.fare.price ?? Infinity) - (b.best?.fare.price ?? Infinity);
+      return a.best.fare.price - b.best.fare.price;
     });
-  }, [allRows, region, cap, query, sort]);
+  }, [matching, band, sort]);
 
   if (isLoading) {
     return (
@@ -372,9 +556,22 @@ export function FlightExplorer() {
     hour: "2-digit",
     minute: "2-digit",
   });
-  const cheapest = rows[0]?.best;
+  const cheapest = rows[0];
+  // Trip lengths come from a per-route pass that may not reach every route on a given day.
+  const stayRoutes = snapshot.stayRoutes;
+  const stayNote = !stay
+    ? null
+    : !stayRoutes
+      ? "Trip lengths have not been crawled yet, so only fares that happen to have this length are listed. The next daily crawl fills them in."
+      : stayRoutes.refreshed < stayRoutes.total
+        ? `Trip lengths were refreshed for ${stayRoutes.refreshed} of ${stayRoutes.total} route-months in the latest crawl; the rest catch up over the next days, so a few routes may be missing here.`
+        : null;
   const selectClass =
-    "theme-panel theme-text rounded-full px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]";
+    "theme-panel theme-text min-w-0 rounded-full px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)] disabled:opacity-50";
+
+  function resetPaging() {
+    setVisible(PAGE_SIZE);
+  }
 
   return (
     <div className="space-y-4">
@@ -391,7 +588,10 @@ export function FlightExplorer() {
               type="button"
               role="tab"
               aria-selected={trip === value}
-              onClick={() => setTrip(value)}
+              onClick={() => {
+                setTrip(value);
+                resetPaging();
+              }}
               className={`theme-toggle-option flex-1 rounded-full px-4 py-1.5 text-xs font-semibold tracking-wide sm:flex-none ${
                 trip === value ? "theme-toggle-option-active" : ""
               }`}
@@ -407,7 +607,7 @@ export function FlightExplorer() {
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
-              setVisible(PAGE_SIZE);
+              resetPaging();
             }}
             placeholder="Find a city or country"
             className="theme-panel theme-text w-full rounded-full px-4 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]"
@@ -422,7 +622,7 @@ export function FlightExplorer() {
             type="button"
             onClick={() => {
               setRegion(option);
-              setVisible(PAGE_SIZE);
+              resetPaging();
             }}
             className={`theme-toggle-option theme-panel flex-none rounded-full px-3 py-1.5 text-xs font-semibold ${
               region === option ? "theme-toggle-option-active" : ""
@@ -433,18 +633,57 @@ export function FlightExplorer() {
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
         <select
-          value={cap}
-          onChange={(event) => setCap(Number(event.target.value))}
+          value={month ?? ""}
+          onChange={(event) => {
+            setMonth(event.target.value || null);
+            resetPaging();
+          }}
           className={selectClass}
-          aria-label="Maximum price"
+          aria-label="Departure month"
         >
-          {PRICE_CAPS.map((value) => (
+          <option value="">Any month</option>
+          {months.map((value) => (
             <option key={value} value={value}>
-              {value ? `Up to ${euro.format(value)}` : "Any price"}
+              {monthLabel(value, "long")}
             </option>
           ))}
+        </select>
+        <select
+          value={stay ?? ""}
+          onChange={(event) => {
+            setStayChoice((event.target.value || null) as FlightStay | null);
+            resetPaging();
+          }}
+          disabled={trip !== "roundTrip"}
+          className={selectClass}
+          aria-label="Trip length"
+        >
+          <option value="">Any trip length</option>
+          {FLIGHT_STAYS.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={band ?? ""}
+          onChange={(event) => {
+            setBand(event.target.value === "" ? null : Number(event.target.value));
+            resetPaging();
+          }}
+          className={selectClass}
+          aria-label="Price"
+        >
+          <option value="">Any price</option>
+          {bandCounts.map((count, index) =>
+            count > 0 || band === index ? (
+              <option key={index} value={index}>
+                {priceBandLabel(index)} ({count})
+              </option>
+            ) : null,
+          )}
         </select>
         <select
           value={sort}
@@ -456,17 +695,20 @@ export function FlightExplorer() {
           <option value="drop">Biggest drop (7 days)</option>
           <option value="name">A to Z</option>
         </select>
-        <p className="theme-subtle ml-auto text-xs">
-          {rows.length} destinations · {monthLabel(months[0])} to {monthLabel(months[months.length - 1])} ·
-          updated {crawled}
+        <p className="theme-subtle col-span-2 text-xs sm:ml-auto">
+          {rows.length} destinations · {month ? monthLabel(month) : `${monthLabel(months[0])} to ${monthLabel(months[months.length - 1])}`}{" "}
+          · updated {crawled}
         </p>
       </div>
 
-      {cheapest && sort === "price" && rows[0] ? (
+      {stayNote ? <p className="theme-subtle text-xs">{stayNote}</p> : null}
+
+      {cheapest && sort === "price" ? (
         <p className="theme-muted text-sm">
-          Cheapest right now: <span className="theme-text font-semibold">{rows[0].destination.name}</span> for{" "}
-          <span className="theme-text font-semibold">{euro.format(cheapest.fare.price)}</span> in{" "}
-          {monthLabel(cheapest.month)}.
+          Cheapest right now: <span className="theme-text font-semibold">{cheapest.destination.name}</span> for{" "}
+          <span className="theme-text font-semibold">{euro.format(cheapest.best.fare.price)}</span> in{" "}
+          {monthLabel(cheapest.best.month)}
+          {nightsLabel(cheapest.best.fare) ? `, ${nightsLabel(cheapest.best.fare)}` : ""}.
         </p>
       ) : null}
 
@@ -481,7 +723,7 @@ export function FlightExplorer() {
               key={row.destination.code}
               row={row}
               months={months}
-              trip={trip}
+              filters={filters}
               open={openCode === row.destination.code}
               onToggle={() =>
                 setOpenCode((current) => (current === row.destination.code ? null : row.destination.code))
@@ -505,8 +747,11 @@ export function FlightExplorer() {
 
       <p className="theme-subtle text-xs">
         Prices are the cheapest fares travellers found on Aviasales in the last days (Travelpayouts Data API),
-        not live quotes. Check the final price on the booking page. Month colors run from cheap (teal) to
-        expensive (orange) per destination.
+        not live quotes: check the final price on the booking page, or compare the same dates on Trip.com and
+        Google Flights from a fare card. The bars under each destination are the departure months from{" "}
+        {monthLabel(months[0], "long")} to {monthLabel(months[months.length - 1], "long")}, coloured from that
+        destination&apos;s cheapest month (teal) to its most expensive (orange); grey means no fare, the
+        outlined bar is the month of the price shown.
       </p>
     </div>
   );

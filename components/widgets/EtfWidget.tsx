@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Area,
@@ -14,6 +14,7 @@ import {
   type TooltipContentProps,
 } from "recharts";
 import { Card } from "@/components/ui/Card";
+import { useChartSize } from "@/components/ui/useChartSize";
 import {
   AsiaOutlineIcon,
   EuropeOutlineIcon,
@@ -66,53 +67,71 @@ function formatMonthTick(value: string) {
   );
 }
 
-function getDateTimePartsInZone(date: Date, timeZone: string) {
+interface Market {
+  timeZone: string;
+  /** Regular session in minutes after midnight, exchange time. */
+  open: number;
+  close: number;
+}
+
+function marketFor(symbol: string): Market {
+  const normalized = symbol.toUpperCase();
+  if (normalized.endsWith(".L")) {
+    return { timeZone: "Europe/London", open: 8 * 60, close: 16 * 60 + 30 };
+  }
+  if (normalized.endsWith(".DE")) {
+    return { timeZone: "Europe/Berlin", open: 9 * 60, close: 17 * 60 + 30 };
+  }
+  return { timeZone: "America/New_York", open: 9 * 60 + 30, close: 16 * 60 };
+}
+
+function isWithinTradingHours(market: Market, now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
+    timeZone: market.timeZone,
     hour12: false,
     weekday: "short",
     hour: "2-digit",
     minute: "2-digit",
-  }).formatToParts(date);
+  }).formatToParts(now);
 
   const weekday = parts.find((part) => part.type === "weekday")?.value;
-  const hour = Number(parts.find((part) => part.type === "hour")?.value);
-  const minute = Number(parts.find((part) => part.type === "minute")?.value);
-
-  return { weekday, hour, minute };
-}
-
-function isWithinTradingHours(symbol: string, now = new Date()) {
-  const normalized = symbol.toUpperCase();
-
-  if (normalized.endsWith(".L")) {
-    const { weekday, hour, minute } = getDateTimePartsInZone(now, "Europe/London");
-    if (weekday === "Sat" || weekday === "Sun") {
-      return false;
-    }
-
-    const totalMinutes = hour * 60 + minute;
-    return totalMinutes >= 8 * 60 && totalMinutes < 16 * 60 + 30;
-  }
-
-  if (normalized.endsWith(".DE")) {
-    const { weekday, hour, minute } = getDateTimePartsInZone(now, "Europe/Berlin");
-    if (weekday === "Sat" || weekday === "Sun") {
-      return false;
-    }
-
-    const totalMinutes = hour * 60 + minute;
-    return totalMinutes >= 9 * 60 && totalMinutes < 17 * 60 + 30;
-  }
-
-  const { weekday, hour, minute } = getDateTimePartsInZone(now, "America/New_York");
   if (weekday === "Sat" || weekday === "Sun") {
     return false;
   }
 
+  // "24" is how some engines print midnight with hour12: false.
+  const hour = Number(parts.find((part) => part.type === "hour")?.value) % 24;
+  const minute = Number(parts.find((part) => part.type === "minute")?.value);
   const totalMinutes = hour * 60 + minute;
-  return totalMinutes >= 9 * 60 + 30 && totalMinutes < 16 * 60;
+  return totalMinutes >= market.open && totalMinutes < market.close;
 }
+
+/** Today's calendar date (YYYY-MM-DD) at the exchange. */
+function marketToday(market: Market, now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: market.timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
+
+function formatCloseDay(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  const weekday = new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(date);
+  const day = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit" }).format(date);
+  return { weekday, day };
+}
+
+function pctColor(value: number) {
+  return value > 0
+    ? "text-[color:var(--success)]"
+    : value < 0
+      ? "text-[color:var(--danger)]"
+      : "theme-muted";
+}
+
+const RECENT_CLOSE_ROWS = 5;
 
 function getYearTicks(history: EtfData["history"]) {
   if (history.length === 0) {
@@ -135,10 +154,12 @@ function getYearTicks(history: EtfData["history"]) {
 }
 
 function getMonthTicks(history: EtfData["history"]) {
+  // The YTD series is led by the previous year's last close; it gets no tick of its own.
+  const year = history[history.length - 1]?.date.slice(0, 4);
   return history
     .filter((point, index) => {
-      const previousMonth = history[index - 1]?.date.slice(0, 7);
-      return index === 0 || point.date.slice(0, 7) !== previousMonth;
+      if (point.date.slice(0, 4) !== year) return false;
+      return point.date.slice(0, 7) !== history[index - 1]?.date.slice(0, 7);
     })
     .map((point) => point.date);
 }
@@ -192,41 +213,8 @@ interface EtfWidgetProps {
 }
 
 export function EtfWidget({ etf }: EtfWidgetProps) {
-  const [chartContainerElement, setChartContainerElement] = useState<HTMLDivElement | null>(null);
-  const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
+  const [setChartContainerElement, chartSize] = useChartSize();
   const [selectedRange, setSelectedRange] = useState<"ytd" | "5y" | "max">("ytd");
-
-  useEffect(() => {
-    if (!chartContainerElement) {
-      return;
-    }
-
-    const updateSize = () => {
-      const { width, height } = chartContainerElement.getBoundingClientRect();
-      const nextWidth = Math.max(0, Math.floor(width));
-      const nextHeight = Math.max(0, Math.floor(height));
-
-      setChartSize((previous) => {
-        if (previous.width === nextWidth && previous.height === nextHeight) {
-          return previous;
-        }
-
-        return { width: nextWidth, height: nextHeight };
-      });
-    };
-
-    updateSize();
-
-    const resizeObserver = new ResizeObserver(() => {
-      updateSize();
-    });
-
-    resizeObserver.observe(chartContainerElement);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [chartContainerElement]);
 
   const { data, isLoading, isError, error } = useQuery<EtfData, Error>({
     queryKey: ["etf", etf.isin],
@@ -290,24 +278,20 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
 
   const chartHistory = getHistoryForRange(selectedRange);
   const periodChangePct = calculatePeriodChange(chartHistory);
-  const periodChangeColor =
-    periodChangePct > 0
-      ? "text-[color:var(--success)]"
-      : periodChangePct < 0
-        ? "text-[color:var(--danger)]"
-        : "theme-muted";
-
-  const changeColor =
-    data.trend === "up"
-      ? "text-[color:var(--success)]"
-      : data.trend === "down"
-        ? "text-[color:var(--danger)]"
-        : "theme-muted";
-    const ticks = selectedRange === "ytd" ? getMonthTicks(chartHistory) : getYearTicks(chartHistory);
-    const tickFormatter = selectedRange === "ytd" ? formatMonthTick : formatYearTick;
-    const lineType: "linear" | "monotone" = "monotone";
-  const showDailyChange = selectedRange === "ytd" && isWithinTradingHours(data.symbol);
-  const inTradingHours = isWithinTradingHours(data.symbol);
+  const periodChangeColor = pctColor(periodChangePct);
+  const changeColor = pctColor(data.dailyChangePct);
+  const ticks = selectedRange === "ytd" ? getMonthTicks(chartHistory) : getYearTicks(chartHistory);
+  const tickFormatter = selectedRange === "ytd" ? formatMonthTick : formatYearTick;
+  const lineType: "linear" | "monotone" = "monotone";
+  const market = marketFor(data.symbol);
+  const inTradingHours = isWithinTradingHours(market);
+  const showDailyChange = selectedRange === "ytd" && inTradingHours;
+  // While the market is open the newest row is today's running price, not a close.
+  const recentCloses = (
+    inTradingHours && data.recentCloses[0]?.date === marketToday(market)
+      ? data.recentCloses.slice(1)
+      : data.recentCloses
+  ).slice(0, RECENT_CLOSE_ROWS);
   const chartColor = inTradingHours
     ? periodChangePct > 0
       ? "var(--success)"
@@ -435,6 +419,61 @@ export function EtfWidget({ etf }: EtfWidgetProps) {
             </ComposedChart>
           ) : null}
         </div>
+
+        {recentCloses.length > 0 ? (
+          <div>
+            <p className="theme-muted text-[11px] font-semibold uppercase tracking-[0.14em]">
+              Last closes
+            </p>
+            <table className="mt-1.5 w-full text-sm tabular-nums">
+              <tbody>
+                {recentCloses.map((close) => {
+                  const { weekday, day } = formatCloseDay(close.date);
+                  return (
+                    <tr key={close.date}>
+                      <td className="theme-muted py-0.5 text-xs">
+                        <span className="inline-block w-8">{weekday}</span>
+                        {day}
+                      </td>
+                      <td className="theme-text py-0.5 text-right font-medium">
+                        {formatCurrency(close.price, data.currency)}
+                      </td>
+                      <td className={`w-[4.5rem] py-0.5 text-right text-xs font-semibold ${pctColor(close.changePct)}`}>
+                        {formatPct(close.changePct)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+
+        {data.yearlyPerformance.length > 0 ? (
+          <div>
+            <p
+              className="theme-muted flex items-baseline justify-between gap-2 text-[11px] font-semibold uppercase tracking-[0.14em]"
+              title="Change in price from one year-end close to the next. Distributions are not included."
+            >
+              Calendar years
+              <span className="theme-subtle font-medium normal-case tracking-normal">price return</span>
+            </p>
+            <ul
+              className="mt-1.5 grid gap-1 tabular-nums"
+              style={{ gridTemplateColumns: `repeat(${data.yearlyPerformance.length}, minmax(0, 1fr))` }}
+            >
+              {data.yearlyPerformance.map(({ year, changePct }) => (
+                <li key={year} className="theme-panel rounded-lg px-1 py-1.5 text-center">
+                  <p className="theme-muted text-[11px] leading-none">{year}</p>
+                  <p className={`mt-1 text-xs font-semibold leading-none ${pctColor(changePct)}`}>
+                    {changePct > 0 ? "+" : ""}
+                    {changePct.toFixed(1)}%
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
     </Card>
   );

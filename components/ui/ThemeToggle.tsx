@@ -16,15 +16,11 @@ export function ThemeToggle() {
       {OPTIONS.map((option) => {
         const isActive = theme === option.value;
 
-        // Use string boolean to prevent hydration mismatch
-        // Initialize aria-pressed with the correct value based on initial theme state
-        const ariaPressedValue = theme === "system" ? "true" : (theme === "light" ? "false" : "true");
-
         return (
           <button
             key={option.value}
             type="button"
-            aria-pressed={isActive ? true : false}
+            aria-pressed={isActive}
             onClick={() => setTheme(option.value)}
             className={`theme-toggle-option rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide ${
               isActive ? "theme-toggle-option-active" : ""

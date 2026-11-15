@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bar,
@@ -11,6 +10,7 @@ import {
   type TooltipContentProps,
 } from "recharts";
 import { Card } from "@/components/ui/Card";
+import { useChartSize } from "@/components/ui/useChartSize";
 import { GymIcon } from "@/components/ui/Icons";
 import type { ApiError, GymUsageData, GymUsageLevel } from "@/types";
 
@@ -70,40 +70,8 @@ function renderGymTooltip() {
 }
 
 export function GymWidget() {
-  const [chartContainerElement, setChartContainerElement] = useState<HTMLDivElement | null>(null);
-  const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
+  const [setChartContainerElement, chartSize] = useChartSize();
 
-  useEffect(() => {
-    if (!chartContainerElement) {
-      return;
-    }
-
-    const updateSize = () => {
-      const { width, height } = chartContainerElement.getBoundingClientRect();
-      const nextWidth = Math.max(0, Math.floor(width));
-      const nextHeight = Math.max(0, Math.floor(height));
-
-      setChartSize((previous) => {
-        if (previous.width === nextWidth && previous.height === nextHeight) {
-          return previous;
-        }
-
-        return { width: nextWidth, height: nextHeight };
-      });
-    };
-
-    updateSize();
-
-    const resizeObserver = new ResizeObserver(() => {
-      updateSize();
-    });
-
-    resizeObserver.observe(chartContainerElement);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [chartContainerElement]);
 
   const { data, isLoading, isError, error } = useQuery<GymUsageData, Error>({
     queryKey: ["gym", "usage", "2405764950"],

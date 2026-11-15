@@ -5,11 +5,12 @@ interface CardProps {
   subtitle?: string;
   icon?: ReactNode;
   children: ReactNode;
+  className?: string;
 }
 
-export function Card({ title, subtitle, icon, children }: CardProps) {
+export function Card({ title, subtitle, icon, children, className = "" }: CardProps) {
   return (
-    <section className="theme-surface min-w-0 rounded-2xl p-4 sm:p-5">
+    <section className={`theme-surface min-w-0 rounded-2xl p-4 sm:p-5 ${className}`}>
       <header className="mb-3 flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           {icon ? (

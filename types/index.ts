@@ -5,6 +5,19 @@ export interface EtfPoint {
   price: number;
 }
 
+export interface EtfClose {
+  date: string;
+  price: number;
+  /** Change versus the previous trading day's close. */
+  changePct: number;
+}
+
+export interface EtfYearPerformance {
+  year: number;
+  /** Price return from the previous year's last close to this year's last close. */
+  changePct: number;
+}
+
 export interface EtfData {
   symbol: string;
   name: string;
@@ -13,8 +26,14 @@ export interface EtfData {
   dailyChangePct: number;
   ytdChangePct: number;
   trend: TrendDirection;
+  /** Daily closes of the current year, led by the previous year's last close (the YTD base). */
   history: EtfPoint[];
+  /** Monthly closes since inception. */
   fullHistory: EtfPoint[];
+  /** Most recent daily closes, newest first. During trading hours the first row is today's live price. */
+  recentCloses: EtfClose[];
+  /** The last complete calendar years, oldest first. */
+  yearlyPerformance: EtfYearPerformance[];
   asOf: string;
   updatedAt: string;
 }
@@ -37,7 +56,9 @@ export interface MacroRegionContextPoint {
 export interface MacroRegionContext {
   id: "eu" | "uk" | "us" | "russia" | "china";
   label: string;
+  /** `history` holds only the latest point (its date drives the freshness note). */
   inflation: MacroIndicator;
+  /** `history` holds only the latest point (its date drives the freshness note). */
   policyRate: MacroIndicator;
   history: MacroRegionContextPoint[];
 }
@@ -154,6 +175,28 @@ export interface TravelAdvisoryData {
   updatedAt: string;
 }
 
+/** One source moving one country to a different level on the shared 1-4 scale. */
+export interface TravelChange {
+  /** Day the new level was published (or first seen in a snapshot), YYYY-MM-DD. */
+  date: string;
+  iso2: string;
+  name: string;
+  source: TravelSourceId;
+  from: TravelSeverity;
+  to: TravelSeverity;
+  fromLabel: string;
+  toLabel: string;
+}
+
+export interface TravelChangeData {
+  /** Newest first. */
+  changes: TravelChange[];
+  /** First day each source's levels were recorded, YYYY-MM-DD. */
+  trackingSince: Partial<Record<TravelSourceId, string>>;
+  /** Last time the levels were compared against the sources. */
+  checkedAt: string | null;
+}
+
 export type FlightRegion =
   | "Europe"
   | "Asia"
@@ -176,9 +219,17 @@ export interface FlightFare {
   link: string;
 }
 
+/** Length of stay of a round trip: up to 4 nights, 5-9, 10-16, 17 or more. */
+export type FlightStay = "short" | "week" | "twoWeeks" | "long";
+
 export interface FlightMonthFares {
   oneWay?: FlightFare;
+  /** Cheapest round trip of the month, whatever the length of stay. */
   roundTrip?: FlightFare;
+  /** Cheapest round trip per length of stay, from the per-route pass of the crawl. */
+  stays?: Partial<Record<FlightStay, FlightFare>>;
+  /** Day (YYYY-MM-DD) the `stays` fares were crawled; older than the snapshot when carried over. */
+  staysAt?: string;
 }
 
 export interface FlightDestination {
@@ -198,6 +249,8 @@ export interface FlightSnapshot {
   months: string[];
   requests: number;
   failedRequests: number;
+  /** Per-route pass for the lengths of stay: route-months refreshed today out of all of them. */
+  stayRoutes?: { refreshed: number; total: number };
   destinations: Record<string, FlightDestination>;
 }
 
@@ -206,6 +259,23 @@ export interface FlightHistory {
   days: string[];
   /** [oneWay, roundTrip] per day, aligned with `days`; null when no fare was cached. */
   series: Record<string, Array<[number | null, number | null]>>;
+}
+
+export interface FlightSummaryFare {
+  code: string;
+  name: string;
+  price: number;
+  /** Departure month, YYYY-MM. */
+  month: string;
+  nights: number | null;
+}
+
+/** Small extract of the snapshot for the dashboard card. */
+export interface FlightSummary {
+  /** Cheapest long-haul round trips of up to 16 nights, one per destination. */
+  top: FlightSummaryFare[];
+  crawledAt: string | null;
+  notice?: string;
 }
 
 export interface FlightData {

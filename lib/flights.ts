@@ -1,10 +1,11 @@
 import countries from "i18n-iso-countries";
 import enLocale from "i18n-iso-countries/langs/en.json";
-import { cheapestFares } from "@/lib/flight-utils";
+import { cheapestFares, stayFor, stayNights } from "@/lib/flight-utils";
 import type {
   FlightDestination,
   FlightFare,
   FlightHistory,
+  FlightMonthFares,
   FlightRegion,
   FlightSnapshot,
 } from "@/types";
@@ -19,6 +20,12 @@ countries.registerLocale(enLocale);
  * searches, not live quotes, which is why one request can cover a whole month
  * and every destination at once (`unique=true` returns one fare per route).
  * 12 months x 2 trip types = 24 requests per crawl (plus pagination).
+ *
+ * That one fare per route has an arbitrary length of stay (a cheap Bangkok fare may mean
+ * staying a month), so a second pass asks for each route-month's own fare list and keeps
+ * the cheapest round trip per length of stay. It is one request per route-month (about a
+ * thousand), paced and time-boxed; whatever it does not reach is carried over from the
+ * previous snapshot and goes first on the next day.
  */
 
 export const FLIGHT_ORIGIN = "MUC";
@@ -32,6 +39,19 @@ const PAGE_LIMIT = 1000;
 const MAX_PAGES = 3;
 const CONCURRENCY = 4;
 const REQUEST_TIMEOUT_MS = 25_000;
+
+// Per-route pass (lengths of stay).
+const STAY_CONCURRENCY = 6;
+/** Minimum gap between request starts: about 270 requests a minute. */
+const STAY_PACE_MS = 220;
+/** The whole crawl must finish inside the route's maxDuration (300 s), blob writes included. */
+const CRAWL_TIME_BUDGET_MS = 230_000;
+const STAY_RATE_LIMIT_PAUSE_MS = 15_000;
+const STAY_MAX_RATE_LIMITS = 3;
+/** Give up when the pass starts with this many failures in a row (wrong parameters, outage). */
+const STAY_MAX_INITIAL_FAILURES = 12;
+/** Carried-over stay fares older than this are dropped. */
+const STAY_MAX_AGE_DAYS = 4;
 
 interface RawFare {
   origin: string;
@@ -70,23 +90,21 @@ export function upcomingMonths(now = new Date(), count = FLIGHT_MONTHS_AHEAD): s
   return months;
 }
 
-async function fetchFarePage(
+class RateLimitError extends Error {}
+
+async function fetchPrices(
   token: string,
-  month: string,
-  oneWay: boolean,
-  page: number,
+  query: Record<string, string>,
+  label: string,
 ): Promise<RawFare[]> {
   const params = new URLSearchParams({
     origin: FLIGHT_ORIGIN,
-    departure_at: month,
-    one_way: String(oneWay),
-    unique: "true",
     sorting: "price",
     direct: "false",
     currency: "eur",
     market: process.env.FLIGHTS_MARKET ?? "de",
     limit: String(PAGE_LIMIT),
-    page: String(page),
+    ...query,
   });
 
   const response = await fetch(`${PRICES_URL}?${params}`, {
@@ -95,15 +113,36 @@ async function fetchFarePage(
     cache: "no-store",
   });
 
+  if (response.status === 429) {
+    throw new RateLimitError(`Travelpayouts ${label}: rate limited (HTTP 429)`);
+  }
   if (!response.ok) {
-    throw new Error(`Travelpayouts ${month} ${oneWay ? "OW" : "RT"} p${page}: HTTP ${response.status}`);
+    throw new Error(`Travelpayouts ${label}: HTTP ${response.status}`);
   }
 
   const json = (await response.json()) as { success?: boolean; data?: RawFare[]; error?: string };
   if (json.success === false) {
-    throw new Error(`Travelpayouts ${month}: ${json.error ?? "request failed"}`);
+    throw new Error(`Travelpayouts ${label}: ${json.error ?? "request failed"}`);
   }
   return Array.isArray(json.data) ? json.data : [];
+}
+
+/** One page of the cheapest fare per destination for a departure month. */
+function fetchFarePage(token: string, month: string, oneWay: boolean, page: number) {
+  return fetchPrices(
+    token,
+    { departure_at: month, one_way: String(oneWay), unique: "true", page: String(page) },
+    `${month} ${oneWay ? "OW" : "RT"} p${page}`,
+  );
+}
+
+/** Every cached round trip of one route in a departure month, cheapest first. */
+function fetchRouteMonth(token: string, destination: string, month: string) {
+  return fetchPrices(
+    token,
+    { destination, departure_at: month, one_way: "false", page: "1" },
+    `${destination} ${month}`,
+  );
 }
 
 async function fetchMonth(token: string, month: string, oneWay: boolean): Promise<RawFare[]> {
@@ -167,6 +206,17 @@ function regionFor(countryCode: string, timeZone: string | null): FlightRegion {
   }
 }
 
+/** "2026-11-24T10:30:00+01:00" -> "2411", the date format of Aviasales search paths. */
+function searchDay(iso: string) {
+  return `${iso.slice(8, 10)}${iso.slice(5, 7)}`;
+}
+
+/** Plain Aviasales search for the fare's dates: a fraction of the size of the API's deep link. */
+function searchLink(destination: string, departureAt: string, returnAt: string | null) {
+  const back = returnAt ? searchDay(returnAt) : "";
+  return `${AVIASALES_BASE}/search/${FLIGHT_ORIGIN}${searchDay(departureAt)}${destination}${back}1`;
+}
+
 function normalizeFare(raw: RawFare, oneWay: boolean): FlightFare {
   const returnTrip = !oneWay && raw.return_at ? raw.return_at : null;
   return {
@@ -201,10 +251,136 @@ async function runPool<T>(jobs: Array<() => Promise<T>>, concurrency: number) {
 
 export { cheapestFares };
 
-export async function crawlFlights(token: string, now = new Date()): Promise<{
+interface StayTask {
+  code: string;
+  month: string;
+  fares: FlightMonthFares;
+  /** Day this route-month's stay fares were last crawled ("" = never). */
+  lastCrawled: string;
+  longHaul: boolean;
+}
+
+function daysBetween(fromDay: string, toDay: string) {
+  return Math.round((Date.parse(toDay) - Date.parse(fromDay)) / 86_400_000);
+}
+
+/**
+ * Second pass: the cheapest round trip per length of stay for every route-month that has
+ * a round-trip fare. Mutates `destinations`. Never throws; the base crawl stands on its own.
+ */
+async function crawlStays(
+  token: string,
+  destinations: Record<string, FlightDestination>,
+  previous: FlightSnapshot | null,
+  today: string,
+  deadline: number,
+): Promise<{ refreshed: number; total: number; requests: number; failed: number; errors: string[] }> {
+  const tasks: StayTask[] = [];
+  for (const destination of Object.values(destinations)) {
+    for (const [month, fares] of Object.entries(destination.months)) {
+      if (!fares.roundTrip) continue;
+      const before = previous?.destinations[destination.code]?.months[month];
+      tasks.push({
+        code: destination.code,
+        month,
+        fares,
+        lastCrawled: before?.stays && before.staysAt ? before.staysAt : "",
+        longHaul: destination.region !== "Europe",
+      });
+
+      // Until refreshed below, keep recent stay fares from the previous snapshot.
+      if (
+        before?.stays &&
+        before.staysAt &&
+        daysBetween(before.staysAt, today) <= STAY_MAX_AGE_DAYS
+      ) {
+        fares.stays = before.stays;
+        fares.staysAt = before.staysAt;
+      }
+    }
+  }
+
+  // Longest-waiting first, so a day that runs out of time is made up for on the next one;
+  // within that, long-haul first (where the length of stay matters most), then cheapest.
+  tasks.sort(
+    (a, b) =>
+      a.lastCrawled.localeCompare(b.lastCrawled) ||
+      Number(b.longHaul) - Number(a.longHaul) ||
+      a.fares.roundTrip!.price - b.fares.roundTrip!.price,
+  );
+
+  const errors: string[] = [];
+  let next = 0;
+  let nextStart = Date.now();
+  let pausedUntil = 0;
+  let rateLimits = 0;
+  let refreshed = 0;
+  let requests = 0;
+  let failed = 0;
+  let aborted = false;
+
+  async function worker() {
+    while (!aborted && next < tasks.length) {
+      // Claim a paced start slot; stop once the request could no longer finish in time.
+      const start = Math.max(nextStart, pausedUntil, Date.now());
+      if (start + REQUEST_TIMEOUT_MS > deadline) return;
+      nextStart = start + STAY_PACE_MS;
+      const task = tasks[next++];
+      await new Promise((resolve) => setTimeout(resolve, start - Date.now()));
+      if (aborted) return;
+
+      requests += 1;
+      try {
+        const fares = await fetchRouteMonth(token, task.code, task.month);
+        const stays: NonNullable<FlightMonthFares["stays"]> = {};
+        for (const raw of fares) {
+          if (!Number.isFinite(raw.price) || raw.price <= 0) continue;
+          if (!raw.departure_at?.startsWith(task.month) || !raw.return_at) continue;
+          const nights = stayNights(raw.departure_at, raw.return_at);
+          if (nights === null) continue;
+          const stay = stayFor(nights);
+          if (!stays[stay] || raw.price < stays[stay].price) {
+            stays[stay] = {
+              ...normalizeFare(raw, false),
+              link: searchLink(task.code, raw.departure_at, raw.return_at),
+            };
+          }
+        }
+        task.fares.stays = stays;
+        task.fares.staysAt = today;
+        refreshed += 1;
+      } catch (reason) {
+        failed += 1;
+        if (reason instanceof RateLimitError) {
+          rateLimits += 1;
+          pausedUntil = Date.now() + STAY_RATE_LIMIT_PAUSE_MS;
+        }
+        if (errors.length < 20) {
+          errors.push(reason instanceof Error ? reason.message : String(reason));
+        }
+        if (
+          rateLimits >= STAY_MAX_RATE_LIMITS ||
+          (refreshed === 0 && requests >= STAY_MAX_INITIAL_FAILURES)
+        ) {
+          aborted = true;
+        }
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(STAY_CONCURRENCY, tasks.length) }, worker));
+  return { refreshed, total: tasks.length, requests, failed, errors };
+}
+
+export async function crawlFlights(
+  token: string,
+  now = new Date(),
+  previous: FlightSnapshot | null = null,
+): Promise<{
   snapshot: FlightSnapshot;
   errors: string[];
 }> {
+  const deadline = Date.now() + CRAWL_TIME_BUDGET_MS;
   const months = upcomingMonths(now);
   const tasks = months.flatMap((month) =>
     [true, false].map((oneWay) => ({ month, oneWay })),
@@ -259,14 +435,25 @@ export async function crawlFlights(token: string, now = new Date()): Promise<{
     }
   });
 
+  const failedRequests = errors.length;
+  const stays = await crawlStays(
+    token,
+    destinations,
+    previous,
+    now.toISOString().slice(0, 10),
+    deadline,
+  );
+  errors.push(...stays.errors);
+
   return {
     snapshot: {
       origin: FLIGHT_ORIGIN,
       currency: "EUR",
       crawledAt: now.toISOString(),
       months,
-      requests: tasks.length,
-      failedRequests: errors.length,
+      requests: tasks.length + stays.requests,
+      failedRequests: failedRequests + stays.failed,
+      stayRoutes: { refreshed: stays.refreshed, total: stays.total },
       destinations,
     },
     errors,

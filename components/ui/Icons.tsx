@@ -155,15 +155,6 @@ export function MacroIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-export function WeatherIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...baseProps(props)}>
-      <path d="M7.5 15.5a4 4 0 1 1 .9-7.9 5.2 5.2 0 0 1 9.3 2.4 3.2 3.2 0 0 1-.2 6.4H7.5Z" />
-      <path d="M9.5 18.5h5" />
-    </svg>
-  );
-}
-
 export function GymIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...baseProps(props)}>
@@ -184,16 +175,6 @@ export function PoolIcon(props: SVGProps<SVGSVGElement>) {
       <path d="M9 6l2-2 2 2 2-2 2 2" />
       <path d="M9 10V6" />
       <path d="M15 10V6" />
-    </svg>
-  );
-}
-
-export function GlobeIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...baseProps(props)}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M3 12h18" />
-      <path d="M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z" />
     </svg>
   );
 }

@@ -158,6 +158,7 @@ const NAME_ALIASES: Record<string, string[]> = {
   "antarctica/british antarctic territory": ["AQ"],
   reunion: ["RE"],
   "sao tome and principe": ["ST"],
+  naoero: ["NR"],
 };
 
 function normaliseName(name: string): string {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Line,
@@ -11,6 +11,7 @@ import {
   type TooltipContentProps,
 } from "recharts";
 import { Card } from "@/components/ui/Card";
+import { useChartSize } from "@/components/ui/useChartSize";
 import { Flag, type FlagCode } from "@/components/ui/Flag";
 import { MacroIcon } from "@/components/ui/Icons";
 import { calcPctChange } from "@/lib/utils";
@@ -239,46 +240,6 @@ function getFreshness(latestDate: string | null) {
     text: `stale data (${formatDataVintage(latestDate)})`,
     className: "text-[color:var(--danger)]",
   };
-}
-
-// Explicit chart size from a ResizeObserver; see CLAUDE.md on why not <ResponsiveContainer>.
-function useChartSize() {
-  const [chartContainerElement, setChartContainerElement] = useState<HTMLDivElement | null>(null);
-  const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
-
-  useEffect(() => {
-    if (!chartContainerElement) {
-      return;
-    }
-
-    const updateSize = () => {
-      const { width, height } = chartContainerElement.getBoundingClientRect();
-      const nextWidth = Math.max(0, Math.floor(width));
-      const nextHeight = Math.max(0, Math.floor(height));
-
-      setChartSize((previous) => {
-        if (previous.width === nextWidth && previous.height === nextHeight) {
-          return previous;
-        }
-
-        return { width: nextWidth, height: nextHeight };
-      });
-    };
-
-    updateSize();
-
-    const resizeObserver = new ResizeObserver(() => {
-      updateSize();
-    });
-
-    resizeObserver.observe(chartContainerElement);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [chartContainerElement]);
-
-  return [setChartContainerElement, chartSize] as const;
 }
 
 function renderMarketTooltip(unit: string) {

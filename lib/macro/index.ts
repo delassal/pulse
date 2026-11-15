@@ -6,6 +6,7 @@ import type { MacroData } from "@/types";
 import { REGION_SERIES_CONFIGS } from "@/lib/macro/constants";
 import { fetchEurUsd, fetchOil, fetchVix } from "@/lib/macro/fred";
 import { fetchRegionContext } from "@/lib/macro/regions";
+import { compactMarketHistory } from "@/lib/macro/series";
 import { fetchGold } from "@/lib/macro/yahoo";
 
 function fulfilledValues<T>(results: PromiseSettledResult<T>[]): T[] {
@@ -32,7 +33,7 @@ export async function getMacroData(): Promise<MacroData> {
     Promise.allSettled(REGION_SERIES_CONFIGS.map((config) => fetchRegionContext(config))),
   ]);
 
-  const marketsToday = fulfilledValues(marketsTodayResults);
+  const marketsToday = fulfilledValues(marketsTodayResults).map(compactMarketHistory);
   if (marketsToday.length === 0) {
     throw new Error(
       withFirstFailureReason("Failed to fetch market indicators", marketsTodayResults),

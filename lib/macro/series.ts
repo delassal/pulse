@@ -55,6 +55,44 @@ export function buildIndicator(
   };
 }
 
+const DAY_MS = 86_400_000;
+/** History older than this (plus a few days of slack for the 1Y range) is thinned to weekly. */
+const DAILY_WINDOW_DAYS = 370;
+
+/**
+ * Shrinks a daily market history for transport: daily points for the last year, the last
+ * point of each week before that, values rounded to 4 decimals. The multi-year chart is a
+ * few hundred pixels wide, so it loses nothing; the payload loses about two thirds.
+ */
+export function compactMarketHistory(indicator: MacroIndicator): MacroIndicator {
+  const history = indicator.history;
+  if (!history?.length) return indicator;
+
+  const cutoff = Date.parse(history[history.length - 1].date) - DAILY_WINDOW_DAYS * DAY_MS;
+  const compact: SeriesPoint[] = [];
+  let lastWeek = -1;
+
+  for (const point of history) {
+    const time = Date.parse(point.date);
+    const rounded = { date: point.date, value: Math.round(point.value * 1e4) / 1e4 };
+
+    if (time >= cutoff) {
+      compact.push(rounded);
+      continue;
+    }
+
+    const week = Math.floor(time / (7 * DAY_MS));
+    if (week === lastWeek) {
+      compact[compact.length - 1] = rounded;
+    } else {
+      compact.push(rounded);
+      lastWeek = week;
+    }
+  }
+
+  return { ...indicator, history: compact };
+}
+
 export function toYoySeries(points: SeriesPoint[]) {
   return points
     .map((point, index) => {

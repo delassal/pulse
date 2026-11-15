@@ -29,8 +29,9 @@ export async function GET() {
 
     if (snapshot) cached = { data, timestamp: Date.now() };
 
+    // Don't let the CDN hold on to an empty response once the first crawl lands.
     return NextResponse.json(data, {
-      headers: { "Cache-Control": "public, max-age=900" },
+      headers: { "Cache-Control": snapshot ? "public, max-age=900" : "no-store" },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected flight data error";

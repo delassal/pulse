@@ -1,9 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { appendHistory, crawlFlights } from "@/lib/flights";
-import { isFlightStoreConfigured, readHistory, saveCrawl } from "@/lib/flights-store";
+import {
+  isFlightStoreConfigured,
+  readHistory,
+  readLatestSnapshot,
+  saveCrawl,
+} from "@/lib/flights-store";
 import type { ApiError } from "@/types";
 
-// 24+ upstream requests plus three blob writes; well under a minute in practice.
+// 24 requests for the month overview, then a paced per-route pass that crawlFlights
+// time-boxes to leave room for the blob writes.
 export const maxDuration = 300;
 
 /**
@@ -29,7 +35,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { snapshot, errors } = await crawlFlights(token);
+    // Yesterday's snapshot tells the crawl which route-months have waited longest.
+    const previous = await readLatestSnapshot().catch(() => null);
+    const { snapshot, errors } = await crawlFlights(token, new Date(), previous);
     const destinationCount = Object.keys(snapshot.destinations).length;
 
     // Never overwrite yesterday's good data with an empty crawl.
@@ -49,6 +57,7 @@ export async function GET(request: NextRequest) {
       destinations: destinationCount,
       requests: snapshot.requests,
       failedRequests: snapshot.failedRequests,
+      stayRoutes: snapshot.stayRoutes,
       historyDays: history.days.length,
       errors,
     });

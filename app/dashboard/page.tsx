@@ -78,8 +78,11 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <PoolWidget />
             <GymWidget />
-            <TravelWidget />
-            <FlightsWidget />
+            {/* One grid cell: travel on top of flights, together as tall as the cards beside them. */}
+            <div className="flex min-w-0 flex-col gap-4 sm:col-span-2 sm:flex-row lg:col-span-1 lg:flex-col">
+              <TravelWidget />
+              <FlightsWidget />
+            </div>
           </div>
         </section>
 

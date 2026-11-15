@@ -1,4 +1,4 @@
-import type { TravelCountry, TravelSeverity, TravelSourceId } from "@/types";
+import type { TravelChange, TravelCountry, TravelSeverity, TravelSourceId } from "@/types";
 
 /** Client-safe labels and helpers for the travel advisory views. */
 
@@ -83,4 +83,8 @@ export function severitySpread(country: TravelCountry): number {
   const levels = severities(country);
   if (levels.length < 2) return 0;
   return Math.max(...levels) - Math.min(...levels);
+}
+
+export function isRaised(change: TravelChange) {
+  return change.to > change.from;
 }

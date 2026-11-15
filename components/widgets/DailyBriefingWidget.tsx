@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ApiError, NewsData, WeatherData } from "@/types";
 
@@ -18,6 +19,17 @@ function formattedDate(): string {
     year: "numeric",
   });
 }
+
+// The dashboard is prerendered at build time, so anything derived from the clock must not
+// be part of that HTML: the server snapshot is empty and the browser fills it in after
+// hydration (and again every minute, so an open tab moves on to "Good afternoon").
+function subscribeToClock(onChange: () => void) {
+  const interval = setInterval(onChange, 60_000);
+  return () => clearInterval(interval);
+}
+
+const clockSnapshot = () => `${greeting()}|${formattedDate()}`;
+const serverClockSnapshot = () => "";
 
 function Skeleton({ className }: { className?: string }) {
   return (
@@ -122,6 +134,12 @@ function NewsSection() {
 }
 
 export function DailyBriefingWidget() {
+  const [greetingText, dateText] = useSyncExternalStore(
+    subscribeToClock,
+    clockSnapshot,
+    serverClockSnapshot,
+  ).split("|");
+
   return (
     <div
       className="theme-surface mb-6 w-full rounded-2xl px-5 py-4 shadow-[var(--shadow)]"
@@ -130,10 +148,17 @@ export function DailyBriefingWidget() {
       <div className="flex flex-col gap-5 sm:flex-row sm:gap-0 sm:divide-x sm:divide-[color:var(--border)]">
         {/* Greeting + date */}
         <div className="flex flex-col justify-center gap-0.5 sm:pr-6">
-          <p className="theme-text text-base font-semibold">
-            {greeting()}, Daniel
-          </p>
-          <p className="theme-subtle text-sm">{formattedDate()}</p>
+          {greetingText ? (
+            <>
+              <p className="theme-text text-base font-semibold">{greetingText}, Daniel</p>
+              <p className="theme-subtle text-sm">{dateText}</p>
+            </>
+          ) : (
+            <>
+              <Skeleton className="h-5 w-44" />
+              <Skeleton className="mt-1.5 h-4 w-52" />
+            </>
+          )}
         </div>
 
         {/* Weather */}

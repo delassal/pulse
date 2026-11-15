@@ -106,11 +106,14 @@ export async function fetchRegionContext(config: RegionSeriesConfig): Promise<Ma
     throw new Error(`Missing regional history for ${config.label}`);
   }
 
+  // The chart uses the merged monthly history. Of the raw series (thousands of daily
+  // points for some policy rates) the client only reads the latest date, for the
+  // freshness note, so only that point is sent.
   return {
     id: config.id,
     label: config.label,
-    inflation,
-    policyRate,
+    inflation: { ...inflation, history: inflation.history.slice(-1) },
+    policyRate: { ...policyRate, history: policyRate.history.slice(-1) },
     history: mergeRegionHistory(inflation.history, policyRate.history),
   };
 }

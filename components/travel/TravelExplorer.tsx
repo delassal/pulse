@@ -3,10 +3,16 @@
 import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Flag } from "@/components/ui/Flag";
+import { Swatch } from "@/components/travel/Swatch";
+import {
+  ChangeDirection,
+  TRAVEL_CHANGES_QUERY,
+  TravelChanges,
+  formatChangeDate,
+} from "@/components/travel/TravelChanges";
 import { TravelMap } from "@/components/travel/TravelMap";
 import {
   LEGENDS,
-  SEVERITY_COLOR,
   SOURCE_LABELS,
   SOURCE_ORDER,
   TRAVEL_VIEWS,
@@ -14,7 +20,13 @@ import {
   severityFor,
   severitySpread,
 } from "@/lib/travel-meta";
-import type { ApiError, TravelAdvisoryData, TravelCountry, TravelSourceId } from "@/types";
+import type {
+  ApiError,
+  TravelAdvisoryData,
+  TravelChange,
+  TravelCountry,
+  TravelSourceId,
+} from "@/types";
 
 async function fetchTravel(): Promise<TravelAdvisoryData> {
   // Revalidate instead of trusting the browser cache: the route sends max-age=3600, which
@@ -34,21 +46,16 @@ function formatDate(value?: string) {
   return date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function Swatch({ severity, size = 10 }: { severity: number; size?: number }) {
-  return (
-    <span
-      aria-hidden
-      className="inline-block flex-none rounded-[3px]"
-      style={{
-        width: size,
-        height: size,
-        background: SEVERITY_COLOR[severity as keyof typeof SEVERITY_COLOR],
-      }}
-    />
-  );
-}
-
-function CountryPopup({ country, onClose }: { country: TravelCountry; onClose: () => void }) {
+function CountryPopup({
+  country,
+  changes,
+  onClose,
+}: {
+  country: TravelCountry;
+  /** This country's level changes, newest first. */
+  changes: TravelChange[];
+  onClose: () => void;
+}) {
   return (
     <div className="theme-tooltip rounded-2xl p-3.5">
       <div className="flex items-start justify-between gap-3">
@@ -66,6 +73,7 @@ function CountryPopup({ country, onClose }: { country: TravelCountry; onClose: (
         {SOURCE_ORDER.map((id) => {
           const advisory = country.advisories[id];
           const updated = formatDate(advisory?.updatedAt);
+          const lastChange = changes.find((change) => change.source === id);
           return (
             <li
               key={id}
@@ -104,6 +112,12 @@ function CountryPopup({ country, onClose }: { country: TravelCountry; onClose: (
                     </>
                   ) : null}
                 </p>
+                {lastChange ? (
+                  <p className="theme-subtle mt-0.5 text-[11px]">
+                    <ChangeDirection change={lastChange} /> on {formatChangeDate(lastChange.date)} · before:{" "}
+                    {lastChange.fromLabel}
+                  </p>
+                ) : null}
               </div>
             </li>
           );
@@ -127,8 +141,15 @@ export function TravelExplorer() {
   const [query, setQuery] = useState("");
   const mapSectionRef = useRef<HTMLElement | null>(null);
 
+  // Same query as the change list below; only used here to annotate the country popup.
+  const { data: changeData } = useQuery(TRAVEL_CHANGES_QUERY);
+
   const countries = useMemo(() => data?.countries ?? [], [data]);
   const selectedCountry = countries.find((country) => country.iso2 === selected);
+  const selectedChanges = useMemo(
+    () => (changeData?.changes ?? []).filter((change) => change.iso2 === selected),
+    [changeData, selected],
+  );
 
   const counts = useMemo(() => {
     const result: Record<number, number> = {};
@@ -247,7 +268,11 @@ export function TravelExplorer() {
           onSelect={setSelected}
           popup={
             selectedCountry ? (
-              <CountryPopup country={selectedCountry} onClose={() => setSelected(null)} />
+              <CountryPopup
+                country={selectedCountry}
+                changes={selectedChanges}
+                onClose={() => setSelected(null)}
+              />
             ) : null
           }
         />
@@ -274,6 +299,8 @@ export function TravelExplorer() {
         Tap a country to compare what Germany, the US, Canada and the UK advise.
       </p>
 
+      <TravelChanges selected={selected} onPick={pick} />
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section className="theme-surface min-w-0 rounded-2xl p-4 sm:p-5">
           <p className="theme-muted text-xs font-medium uppercase tracking-wide">Highest level</p>
@@ -287,7 +314,7 @@ export function TravelExplorer() {
                 type="button"
                 onClick={() => pick(country.iso2)}
                 className={`theme-panel rounded-lg px-2.5 py-1 text-xs font-medium ${
-                  selected === country.iso2 ? "ring-2 ring-[color:var(--foreground)]" : ""
+                  selected === country.iso2 ? "outline-2 -outline-offset-1 outline-[color:var(--foreground)]" : ""
                 }`}
               >
                 {country.name}
